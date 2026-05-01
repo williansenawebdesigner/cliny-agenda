@@ -29,13 +29,21 @@ function getAdminApp(): App {
     process.env.GOOGLE_CLOUD_PROJECT;
 
   if (serviceAccount) {
+    console.log('[firebase-admin] using service account', {
+      projectId: serviceAccount.project_id,
+      clientEmail: serviceAccount.client_email,
+      hasPrivateKey: !!serviceAccount.private_key,
+    });
     return initializeApp({
       credential: cert(serviceAccount),
       projectId: serviceAccount.project_id,
     });
   }
 
-  // Fallback to ADC (works on GCP/Cloud Run; on Vercel you must set FIREBASE_SERVICE_ACCOUNT)
+  console.warn(
+    '[firebase-admin] FIREBASE_SERVICE_ACCOUNT not set — falling back to ADC ' +
+      '(this WILL fail on Vercel; set FIREBASE_SERVICE_ACCOUNT)'
+  );
   return initializeApp({
     credential: applicationDefault(),
     projectId,

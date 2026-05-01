@@ -5,8 +5,6 @@ import { getWebhookSecret } from '../_lib/evolution.js';
 function isAuthorized(req: VercelRequest): boolean {
   const expected = getWebhookSecret();
   if (!expected) {
-    // No secret configured: legacy behavior — validate body apikey against the
-    // global Evolution key. Strongly recommended to set EVOLUTION_WEBHOOK_SECRET.
     const bodyKey = (req.body as any)?.apikey;
     return !!bodyKey && bodyKey === process.env.EVOLUTION_GLOBAL_API_KEY;
   }
@@ -20,6 +18,11 @@ function isAuthorized(req: VercelRequest): boolean {
   return headerSecret === expected || querySecret === expected;
 }
 
+function normalizeEvent(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.toLowerCase().replace(/[_-]/g, '.');
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -27,55 +30,91 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!isAuthorized(req)) {
+    console.warn('[webhook] Unauthorized call', {
+      headers: Object.keys(req.headers),
+      hasQuerySecret: !!req.query.secret,
+    });
     return res.status(401).json({ error: 'Unauthorized webhook' });
   }
 
+  const payload = req.body ?? {};
+  const event = normalizeEvent(payload.event);
+  const instanceName = payload.instance;
+
+  console.log('[webhook] received', {
+    event,
+    rawEvent: payload.event,
+    instance: instanceName,
+    keys: Object.keys(payload),
+  });
+
   try {
-    const payload = req.body;
-    const db = getDb();
-
-    if (payload?.event === 'messages.upsert') {
-      const messageData = payload.data;
-      const jid = messageData?.key?.remoteJid;
-      const isFromMe = !!messageData?.key?.fromMe;
-      const msgType = messageData?.messageType;
-      const content =
-        messageData?.message?.conversation ||
-        messageData?.message?.extendedTextMessage?.text ||
-        '';
-
-      const audioBase64 =
-        messageData?.message?.audioMessage && payload?.data?.base64
-          ? payload.data.base64
-          : null;
-
-      const instanceQuery = await db
-        .collection('whatsapp_instances')
-        .where('instanceName', '==', payload.instance)
-        .limit(1)
-        .get();
-
-      const clinicId = instanceQuery.empty
-        ? 'unknown'
-        : instanceQuery.docs[0].data().clinicId;
-
-      await db.collection('whatsapp_messages').add({
-        instanceName: payload.instance,
-        clinicId,
-        remoteJid: jid,
-        fromMe: isFromMe,
-        messageType: msgType,
-        content,
-        audioBase64,
-        messageTimestamp:
-          messageData?.messageTimestamp || Math.floor(Date.now() / 1000),
-        createdAt: new Date().toISOString(),
-      });
+    if (event !== 'messages.upsert') {
+      console.log('[webhook] ignoring non-message event', { event });
+      return res.status(200).json({ success: true, ignored: true });
     }
 
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Webhook error:', error);
+    const messageData = payload.data ?? {};
+    const jid = messageData?.key?.remoteJid;
+    const isFromMe = !!messageData?.key?.fromMe;
+    const msgType = messageData?.messageType;
+    const content =
+      messageData?.message?.conversation ||
+      messageData?.message?.extendedTextMessage?.text ||
+      messageData?.message?.imageMessage?.caption ||
+      '';
+
+    const audioBase64 =
+      messageData?.message?.audioMessage && payload?.data?.base64
+        ? payload.data.base64
+        : null;
+
+    const db = getDb();
+
+    let clinicId = 'unknown';
+    if (instanceName) {
+      const instSnap = await db
+        .collection('whatsapp_instances')
+        .where('instanceName', '==', instanceName)
+        .limit(1)
+        .get();
+      if (!instSnap.empty) {
+        clinicId = instSnap.docs[0].data().clinicId;
+      } else {
+        console.warn('[webhook] no whatsapp_instance found', { instanceName });
+      }
+    }
+
+    const docRef = await db.collection('whatsapp_messages').add({
+      instanceName,
+      clinicId,
+      remoteJid: jid,
+      fromMe: isFromMe,
+      messageType: msgType,
+      content,
+      audioBase64,
+      messageTimestamp:
+        messageData?.messageTimestamp || Math.floor(Date.now() / 1000),
+      createdAt: new Date().toISOString(),
+    });
+
+    console.log('[webhook] message stored', {
+      id: docRef.id,
+      clinicId,
+      instanceName,
+      jid,
+      fromMe: isFromMe,
+      msgType,
+      contentLen: content.length,
+    });
+
+    return res.status(200).json({ success: true, id: docRef.id });
+  } catch (error: any) {
+    console.error('[webhook] error', {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+    });
     return res.status(500).json({ error: 'Internal webhook error' });
   }
 }
