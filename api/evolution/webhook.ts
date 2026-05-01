@@ -1,13 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { getDb } from '../_lib/firebase.js';
 import { getWebhookSecret } from '../_lib/evolution.js';
 
 function isAuthorized(req: VercelRequest): boolean {
   const expected = getWebhookSecret();
   if (!expected) {
-    // No secret configured: fall back to validating against the global Evolution API key
-    // present in the body (legacy behavior). Strongly recommended to set EVOLUTION_WEBHOOK_SECRET.
+    // No secret configured: legacy behavior — validate body apikey against the
+    // global Evolution key. Strongly recommended to set EVOLUTION_WEBHOOK_SECRET.
     const bodyKey = (req.body as any)?.apikey;
     return !!bodyKey && bodyKey === process.env.EVOLUTION_GLOBAL_API_KEY;
   }
@@ -50,14 +49,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? payload.data.base64
           : null;
 
-      const instancesSnap = await getDocs(
-        query(collection(db, 'whatsapp_instances'), where('instanceName', '==', payload.instance))
-      );
-      const clinicId = instancesSnap.empty
-        ? 'unknown'
-        : instancesSnap.docs[0].data().clinicId;
+      const instanceQuery = await db
+        .collection('whatsapp_instances')
+        .where('instanceName', '==', payload.instance)
+        .limit(1)
+        .get();
 
-      await addDoc(collection(db, 'whatsapp_messages'), {
+      const clinicId = instanceQuery.empty
+        ? 'unknown'
+        : instanceQuery.docs[0].data().clinicId;
+
+      await db.collection('whatsapp_messages').add({
         instanceName: payload.instance,
         clinicId,
         remoteJid: jid,

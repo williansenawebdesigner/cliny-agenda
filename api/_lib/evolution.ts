@@ -18,9 +18,10 @@ export function getEvolutionEnv(res: VercelResponse): EvolutionEnv | null {
 }
 
 export function getPublicUrl(): string {
-  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'http://localhost:3000';
+  const raw =
+    process.env.PUBLIC_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  return raw.replace(/\/+$/, '');
 }
 
 export function getWebhookSecret(): string | null {
