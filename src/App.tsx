@@ -39,18 +39,18 @@ import {
   Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from './lib/firebase.ts';
-import { cn } from './lib/utils.ts';
-import { Clinic, OperationType, Appointment, Professional } from './types.ts';
-import { seedClinicData } from './lib/seedData.ts';
+import { auth, db } from './lib/firebase';
+import { cn } from './lib/utils';
+import { Clinic, OperationType } from './types';
+import { seedClinicData } from './lib/seedData';
 
 // New Components
-import { ProfessionalsView } from './components/ProfessionalsView.tsx';
-import { PatientsView } from './components/PatientsView.tsx';
-import { AgendaView } from './components/AgendaView.tsx';
-import { NewAppointmentModal } from './components/NewAppointmentModal.tsx';
-import { WhatsAppView } from './components/WhatsAppView.tsx';
-import { ChatView } from './components/ChatView.tsx';
+import { ProfessionalsView } from './components/ProfessionalsView';
+import { PatientsView } from './components/PatientsView';
+import { AgendaView } from './components/AgendaView';
+import { NewAppointmentModal } from './components/NewAppointmentModal';
+import { WhatsAppView } from './components/WhatsAppView';
+import { ChatView } from './components/ChatView';
 
 // Context for Clinic
 const ClinicContext = createContext<{ 
