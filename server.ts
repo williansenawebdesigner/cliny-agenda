@@ -14,15 +14,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function startServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  app.use(cors());
-  app.use(express.json({ limit: '50mb' }));
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
 
-  // API Route to fetch Evolution config status
-  app.get('/api/evolution/config', (req, res) => {
+// API Route to fetch Evolution config status
+app.get('/api/evolution/config', (req, res) => {
+
     res.json({
       hasUrl: !!process.env.EVOLUTION_API_URL,
       hasApiKey: !!process.env.EVOLUTION_GLOBAL_API_KEY,
@@ -203,24 +203,28 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+// Vite middleware for development
+if (process.env.NODE_ENV !== 'production') {
+  createViteServer({
+    server: { middlewareMode: true },
+    appType: 'spa',
+  }).then(vite => {
     app.use(vite.middlewares);
-  } else {
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  });
+} else {
+  if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
   }
-
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
 }
 
-startServer();
+export default app;

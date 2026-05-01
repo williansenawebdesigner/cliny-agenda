@@ -205,14 +205,18 @@ function InstanceCard({ instance, professionals, onEdit, onRefresh }: { instance
     setDeleting(true);
     try {
       // Delete from Evolution API
-      await fetch(`/api/evolution/instance/${instance.instanceName}`, {
+      const response = await fetch(`/api/evolution/instance/${instance.instanceName}`, {
         method: 'DELETE'
       });
+      if (!response.ok) {
+         console.error("Evolution Delete failed:", await response.text());
+      }
+      
       // Delete from DB
       await deleteDoc(doc(db, 'whatsapp_instances', instance.id));
       onRefresh();
     } catch(e) {
-      console.error(e);
+      console.error("Error deleting instance:", e);
     } finally {
       setDeleting(false);
       setShowConfirmDelete(false);
