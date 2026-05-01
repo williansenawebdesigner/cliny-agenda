@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
-import { collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { WhatsAppInstance } from '../types';
 import { Send, Phone, User, Play, Pause } from 'lucide-react';
@@ -40,29 +40,40 @@ export function ChatView({ clinicId }: { clinicId: string }) {
   useEffect(() => {
     if (!selectedInstance) return;
 
-    // Listen to all messages for the selected instance
     const q = query(
       collection(db, 'whatsapp_messages'),
-      where('instanceName', '==', selectedInstance.instanceName),
-      orderBy('messageTimestamp', 'asc')
+      where('clinicId', '==', clinicId),
+      where('instanceName', '==', selectedInstance.instanceName)
     );
 
-    const unsub = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
-      setMessages(msgs);
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const msgs = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Message))
+          .sort((a, b) => a.messageTimestamp - b.messageTimestamp);
+        setMessages(msgs);
 
-      // Group by remoteJid
-      const convMap = new Map<string, { lastMessage: string, timestamp: number }>();
-      msgs.forEach(m => {
-        convMap.set(m.remoteJid, { lastMessage: m.messageType === 'audio' ? 'Áudio' : m.content, timestamp: m.messageTimestamp });
-      });
-      
-      const convs = Array.from(convMap.entries()).map(([jid, data]) => ({ jid, ...data })).sort((a,b) => b.timestamp - a.timestamp);
-      setConversations(convs);
-    });
+        const convMap = new Map<string, { lastMessage: string; timestamp: number }>();
+        msgs.forEach((m) => {
+          convMap.set(m.remoteJid, {
+            lastMessage: m.messageType === 'audio' ? 'Áudio' : m.content,
+            timestamp: m.messageTimestamp,
+          });
+        });
+
+        const convs = Array.from(convMap.entries())
+          .map(([jid, data]) => ({ jid, ...data }))
+          .sort((a, b) => b.timestamp - a.timestamp);
+        setConversations(convs);
+      },
+      (error) => {
+        console.error('[ChatView] onSnapshot error', error);
+      }
+    );
 
     return () => unsub();
-  }, [selectedInstance]);
+  }, [selectedInstance, clinicId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
