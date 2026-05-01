@@ -1,76 +1,63 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default Deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
 
     // -- HELPERS --
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isEmailVerified() {
-      // Allow during development or for Google users which typically are verified
-      return request.auth.token.email_verified == true;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128;
-    }
-
-    // Checks if the user is the administrator of a specific clinic
     function isClinicAdmin(clinicId) {
-      return isSignedIn() && (
-        get(/databases/$(database)/documents/clinics/$(clinicId)).data.adminEmail == request.auth.token.email
-      );
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/clinics/$(clinicId)).data.adminEmail == request.auth.token.email;
     }
 
     // -- CLINICS --
     match /clinics/{clinicId} {
       allow get: if isSignedIn();
-      allow list: if isSignedIn() && resource.data.adminEmail == request.auth.token.email;
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.adminEmail == request.auth.token.email;
       allow update: if isClinicAdmin(clinicId);
+      allow delete: if isClinicAdmin(clinicId);
     }
 
     // -- PROFESSIONALS --
     match /professionals/{profId} {
-      allow read: if isSignedIn() && resource.data.clinicId != null;
-      allow list: if isSignedIn() && (
-        // Allow if listing for a clinic they own (handled by query filter requirement)
-        // In practice, rules must enforce that they can only see their own clinic data
-        resource.data.clinicId != null
-      );
+      allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && isClinicAdmin(request.resource.data.clinicId);
       allow update, delete: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
     }
 
     // -- WHATSAPP INSTANCES --
     match /whatsapp_instances/{instanceId} {
-      allow read: if isSignedIn() && resource.data.clinicId != null;
+      allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && isClinicAdmin(request.resource.data.clinicId);
       allow update, delete: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
     }
 
     // -- WHATSAPP MESSAGES --
+    // Backend (Admin SDK) bypasses rules entirely. Front-end uses these.
     match /whatsapp_messages/{messageId} {
-      allow read: if isSignedIn() && resource.data.clinicId != null;
-      allow create: if true;
-      allow update, delete: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow list: if isSignedIn();
+      // Webhook on the server uses Admin SDK, so we deny client-side writes here.
+      allow create, update, delete: if false;
     }
 
     // -- PATIENTS --
     match /patients/{patientId} {
-      allow read: if isSignedIn() && resource.data.clinicId != null;
+      allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && isClinicAdmin(request.resource.data.clinicId);
       allow update, delete: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
     }
 
     // -- APPOINTMENTS --
     match /appointments/{appId} {
-      allow read: if isSignedIn() && resource.data.clinicId != null;
+      allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && isClinicAdmin(request.resource.data.clinicId);
       allow update, delete: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
     }
