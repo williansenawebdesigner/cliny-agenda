@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "clinic": {
+      "title": "Clinic",
+      "description": "A clinic organization",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "settings": { "type": "object" }
+      },
+      "required": ["name", "adminEmail"]
+    },
+    "professional": {
+      "title": "Professional",
+      "description": "A healthcare professional working in a clinic",
+      "type": "object",
+      "properties": {
+        "clinicId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "specialty": { "type": "string" },
+        "weeklyLinkToken": { "type": "string" },
+        "schedule": { "type": "object" },
+        "services": { "type": "array" }
+      },
+      "required": ["clinicId", "name", "email"]
+    },
+    "whatsapp_instance": {
+      "title": "WhatsApp Instance",
+      "description": "A WhatsApp connection instance for a clinic",
+      "type": "object",
+      "properties": {
+        "clinicId": { "type": "string" },
+        "name": { "type": "string" },
+        "instanceName": { "type": "string" },
+        "professionalId": { "type": "string" },
+        "prompt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["clinicId", "name", "instanceName", "prompt", "status"]
+    },
+    "patient": {
+      "title": "Patient",
+      "description": "A patient registered in a clinic",
+      "type": "object",
+      "properties": {
+        "clinicId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["clinicId", "name", "phone"]
+    },
+    "appointment": {
+      "title": "Appointment",
+      "description": "An appointment between a patient and a professional",
+      "type": "object",
+      "properties": {
+        "clinicId": { "type": "string" },
+        "professionalId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["scheduled", "confirmed", "checked-in", "completed", "cancelled", "no-show"] },
+        "price": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["clinicId", "professionalId", "patientId", "serviceId", "startTime", "endTime", "status"]
+    }
+  },
+  "firestore": {
+    "/clinics/{clinicId}": {
+      "schema": "clinic",
+      "description": "Clinic details"
+    },
+    "/whatsapp_instances/{instanceId}": {
+      "schema": "whatsapp_instance",
+      "description": "WhatsApp instances for the clinic"
+    },
+    "/professionals/{professionalId}": {
+      "schema": "professional",
+      "description": "Professionals working at the clinic"
+    },
+    "/patients/{patientId}": {
+      "schema": "patient",
+      "description": "Patients registered at the clinic"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "appointment",
+      "description": "Appointments for a clinic"
+    }
+  }
+}
