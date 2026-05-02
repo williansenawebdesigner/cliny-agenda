@@ -46,6 +46,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // -- WHATSAPP CONVERSATIONS (per-jid state, e.g. agent paused) --
+    match /whatsapp_conversations/{convId} {
+      allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+      allow list: if isSignedIn();
+      // Front-end can toggle agentEnabled per conversation
+      allow create, update: if isSignedIn() && isClinicAdmin(request.resource.data.clinicId);
+      allow delete: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
+    }
+
     // -- PATIENTS --
     match /patients/{patientId} {
       allow get: if isSignedIn() && isClinicAdmin(resource.data.clinicId);
