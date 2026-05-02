@@ -1,6 +1,7 @@
 import { GoogleGenAI, type Content, type Part } from '@google/genai';
 import type { Firestore } from 'firebase-admin/firestore';
 import { executeTool, toolDeclarations, type ToolContext } from './agentTools.js';
+import { DEFAULT_TIMEZONE, humanInTz, hmInTz, ymdInTz, dayOfWeekInTz } from './tz.js';
 
 export interface AgentConfig {
   enabled: boolean;
@@ -37,24 +38,26 @@ export interface ConversationTurn {
   content: string;
 }
 
-function todayContext(): string {
+function todayContext(tz: string): string {
   const now = new Date();
-  const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-  return `Hoje é ${days[now.getDay()]}, ${now.toLocaleDateString('pt-BR')} (${now.toISOString().slice(0, 10)}). Hora atual: ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`;
+  return `Hoje é ${humanInTz(now, tz)} (data ISO: ${ymdInTz(now, tz)}). Hora atual: ${hmInTz(now, tz)}. Fuso horário da clínica: ${tz}.`;
 }
 
 export function buildSystemPrompt(opts: {
   basePrompt: string;
   agent?: AgentConfig;
   clinicName?: string;
+  timezone?: string;
 }): string {
   const cfg = { ...DEFAULT_AGENT, ...(opts.agent ?? {}) };
+  const tz = opts.timezone || DEFAULT_TIMEZONE;
   const parts = [
     `Você é o assistente virtual de ${opts.clinicName ?? 'uma clínica'} no WhatsApp.`,
     `Persona: ${cfg.persona ?? DEFAULT_AGENT.persona}.`,
     'Sempre responda em português do Brasil. Seja breve, claro e objetivo.',
     'Use no máximo 3 parágrafos curtos. Evite listas longas. Não use markdown.',
-    todayContext(),
+    todayContext(tz),
+    `Sempre que mencionar horários ao paciente, use o horário local da clínica (${tz}). Os campos "startTimeLocal" das ferramentas já estão nesse fuso — use-os, NÃO converta novamente.`,
     '',
     '## Capacidades',
     'Você TEM acesso a ferramentas para:',
@@ -86,14 +89,19 @@ export function buildSystemPrompt(opts: {
   return parts.join('\n');
 }
 
-export function isWithinWorkingHours(cfg: AgentConfig, now = new Date()): boolean {
+export function isWithinWorkingHours(
+  cfg: AgentConfig,
+  tz = DEFAULT_TIMEZONE,
+  now = new Date()
+): boolean {
   const wh = cfg.workingHours;
   if (!wh?.enabled) return true;
-  const day = now.getDay();
+  const day = dayOfWeekInTz(now, tz);
   if (!wh.weekdays.includes(day)) return false;
   const [sh, sm] = wh.start.split(':').map(Number);
   const [eh, em] = wh.end.split(':').map(Number);
-  const minutes = now.getHours() * 60 + now.getMinutes();
+  const [hh, mm] = hmInTz(now, tz).split(':').map(Number);
+  const minutes = hh * 60 + mm;
   return minutes >= sh * 60 + sm && minutes <= eh * 60 + em;
 }
 

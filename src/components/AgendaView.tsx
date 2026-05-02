@@ -21,12 +21,15 @@ import {
   Mail,
   Eye,
   Sun,
-  Sunset
+  Sunset,
+  Search,
+  CalendarCheck,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from '../lib/firebase';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Appointment, Patient, Professional, ProfessionalService } from '../types';
+import { Appointment, Patient, Professional, ProfessionalService, AppointmentStatus } from '../types';
 import { 
   format, 
   addDays, 
@@ -129,25 +132,54 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
 
   if (isFocusMode) {
     return (
-      <FocusMode
-        selectedDate={selectedDate}
-        appointments={profFilter === 'all' ? appointments : appointments.filter(a => a.professionalId === profFilter)}
-        patients={patients}
-        professionals={professionals}
-        procedures={procedures}
-        professionalsList={Object.values(professionals)}
-        profFilter={profFilter}
-        setProfFilter={setProfFilter}
-        loading={loading}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        onToday={() => setSelectedDate(new Date())}
-        onExit={() => setViewMode('day')}
-        onSelectAppointment={(app) => {
-          setSelectedAppointment(app);
-          setIsDetailOpen(true);
-        }}
-      />
+      <>
+        <FocusMode
+          selectedDate={selectedDate}
+          appointments={profFilter === 'all' ? appointments : appointments.filter(a => a.professionalId === profFilter)}
+          patients={patients}
+          professionals={professionals}
+          procedures={procedures}
+          professionalsList={Object.values(professionals)}
+          profFilter={profFilter}
+          setProfFilter={setProfFilter}
+          loading={loading}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          onToday={() => setSelectedDate(new Date())}
+          onExit={() => setViewMode('day')}
+          onNew={() => setIsModalOpen(true)}
+          onEdit={(app) => {
+            setSelectedAppointment(app);
+            setIsEditing(true);
+          }}
+          onSelectAppointment={(app) => {
+            setSelectedAppointment(app);
+            setIsDetailOpen(true);
+          }}
+        />
+        <AnimatePresence>
+          {(isModalOpen || isEditing) && (
+            <NewAppointmentModal
+              clinicId={clinicId}
+              initialDate={selectedDate}
+              existingAppointment={isEditing ? selectedAppointment! : undefined}
+              onClose={() => { setIsModalOpen(false); setIsEditing(false); }}
+              onSuccess={() => { setIsModalOpen(false); setIsEditing(false); setIsDetailOpen(false); }}
+            />
+          )}
+          {isDetailOpen && selectedAppointment && (
+            <AppointmentDetailDrawer
+              appointment={selectedAppointment}
+              patient={patients[selectedAppointment.patientId]}
+              professional={professionals[selectedAppointment.professionalId]}
+              procedure={procedures[selectedAppointment.serviceId]}
+              onClose={() => setIsDetailOpen(false)}
+              onEdit={() => { setIsEditing(true); setIsDetailOpen(false); }}
+              onAction={() => setIsDetailOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      </>
     );
   }
 
@@ -804,6 +836,8 @@ interface FocusModeProps {
   onNext: () => void;
   onToday: () => void;
   onExit: () => void;
+  onNew: () => void;
+  onEdit: (a: Appointment) => void;
   onSelectAppointment: (a: Appointment) => void;
 }
 
@@ -821,36 +855,79 @@ function FocusMode({
   onNext,
   onToday,
   onExit,
+  onNew,
+  onEdit,
   onSelectAppointment,
 }: FocusModeProps) {
+  const [search, setSearch] = useState('');
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   const dayApps = appointments
     .filter((a) => isSameDay(new Date(a.startTime), selectedDate))
-    .filter((a) => a.status !== 'cancelled')
+    .filter((a) => (showCancelled ? true : a.status !== 'cancelled'))
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-  const morning = dayApps.filter((a) => new Date(a.startTime).getHours() < 12);
-  const afternoon = dayApps.filter((a) => new Date(a.startTime).getHours() >= 12);
+  const term = search.trim().toLowerCase();
+  const filteredApps = term
+    ? dayApps.filter((a) => {
+        const patient = patients[a.patientId];
+        const prof = professionals[a.professionalId];
+        const service = procedures[a.serviceId];
+        return (
+          patient?.name?.toLowerCase().includes(term) ||
+          patient?.phone?.toLowerCase().includes(term) ||
+          prof?.name?.toLowerCase().includes(term) ||
+          service?.name?.toLowerCase().includes(term)
+        );
+      })
+    : dayApps;
+
+  const morning = filteredApps.filter((a) => new Date(a.startTime).getHours() < 12);
+  const afternoon = filteredApps.filter((a) => new Date(a.startTime).getHours() >= 12);
 
   const isToday = isSameDay(selectedDate, new Date());
+
+  const updateStatus = async (a: Appointment, status: AppointmentStatus) => {
+    setBusyId(a.id);
+    try {
+      await updateDoc(doc(db, 'appointments', a.id), {
+        status,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('[focus] status update failed', e);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-40 bg-white overflow-y-auto">
       <div className="max-w-3xl mx-auto px-6 md:px-12 py-10 md:py-16">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-12">
+        <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500 uppercase tracking-[0.25em]">
             <Eye size={14} /> Modo Foco
           </div>
-          <button
-            onClick={onExit}
-            className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-widest"
-          >
-            <X size={14} /> Sair
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onNew}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-widest transition-colors active:scale-95"
+            >
+              <Plus size={14} /> Novo
+            </button>
+            <button
+              onClick={onExit}
+              className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-widest"
+            >
+              <X size={14} /> Sair
+            </button>
+          </div>
         </div>
 
         {/* Date header */}
-        <div className="flex flex-col items-center text-center mb-10">
+        <div className="flex flex-col items-center text-center mb-8">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mb-3">
             {isToday ? 'Hoje' : format(selectedDate, 'EEEE', { locale: ptBR })}
           </span>
@@ -858,12 +935,14 @@ function FocusMode({
             {format(selectedDate, "d 'de' MMMM", { locale: ptBR })}
           </h1>
           <p className="text-sm text-slate-400 font-medium">
-            {dayApps.length} {dayApps.length === 1 ? 'paciente agendado' : 'pacientes agendados'}
+            {filteredApps.length}{' '}
+            {filteredApps.length === 1 ? 'paciente' : 'pacientes'}
+            {term ? ` encontrado${filteredApps.length === 1 ? '' : 's'}` : ' agendados'}
           </p>
         </div>
 
         {/* Date nav */}
-        <div className="flex items-center justify-center gap-3 mb-10">
+        <div className="flex items-center justify-center gap-3 mb-8">
           <button onClick={onPrev} className="w-10 h-10 rounded-full border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 text-slate-400 flex items-center justify-center transition-colors">
             <ChevronLeft size={18} />
           </button>
@@ -877,43 +956,79 @@ function FocusMode({
           </button>
         </div>
 
-        {/* Optional professional filter */}
-        {professionalsList.length > 1 && (
-          <div className="flex items-center justify-center gap-2 flex-wrap mb-12">
+        {/* Search */}
+        <div className="relative mb-6">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none">
+            <Search size={16} />
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar paciente, telefone, profissional ou serviço…"
+            className="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-100 focus:bg-white focus:border-emerald-500 rounded-xl outline-none text-sm font-medium text-slate-900 placeholder:text-slate-300 transition-all"
+          />
+          {search && (
             <button
-              onClick={() => setProfFilter('all')}
-              className={cn(
-                'px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all',
-                profFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 hover:text-slate-900'
-              )}
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-slate-700 rounded"
             >
-              Todos
+              <X size={14} />
             </button>
-            {professionalsList.map((p) => (
+          )}
+        </div>
+
+        {/* Filters row */}
+        <div className="flex items-center gap-2 flex-wrap mb-12">
+          {professionalsList.length > 1 && (
+            <>
               <button
-                key={p.id}
-                onClick={() => setProfFilter(p.id)}
+                onClick={() => setProfFilter('all')}
                 className={cn(
                   'px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all',
-                  profFilter === p.id ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-slate-900'
+                  profFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 hover:text-slate-900'
                 )}
               >
-                {p.name}
+                Todos
               </button>
-            ))}
-          </div>
-        )}
+              {professionalsList.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setProfFilter(p.id)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all',
+                    profFilter === p.id ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-slate-900'
+                  )}
+                >
+                  {p.name}
+                </button>
+              ))}
+              <span className="w-px h-5 bg-slate-100 mx-2" />
+            </>
+          )}
+          <button
+            onClick={() => setShowCancelled((v) => !v)}
+            className={cn(
+              'px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all',
+              showCancelled ? 'bg-rose-100 text-rose-700' : 'bg-slate-50 text-slate-400 hover:text-slate-900'
+            )}
+          >
+            {showCancelled ? 'Mostrando cancelados' : 'Ocultar cancelados'}
+          </button>
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : dayApps.length === 0 ? (
+        ) : filteredApps.length === 0 ? (
           <div className="text-center py-24">
             <div className="w-16 h-16 bg-slate-50 rounded-full mx-auto mb-6 flex items-center justify-center text-slate-300">
-              <CalendarIcon size={28} />
+              {term ? <Search size={28} /> : <CalendarIcon size={28} />}
             </div>
-            <p className="text-slate-400 font-medium">Nenhum atendimento para este dia.</p>
+            <p className="text-slate-400 font-medium">
+              {term ? 'Nenhum resultado encontrado.' : 'Nenhum atendimento para este dia.'}
+            </p>
           </div>
         ) : (
           <div className="space-y-12">
@@ -924,7 +1039,10 @@ function FocusMode({
               patients={patients}
               professionals={professionals}
               procedures={procedures}
-              onSelect={onSelectAppointment}
+              busyId={busyId}
+              onOpen={onSelectAppointment}
+              onEdit={onEdit}
+              onUpdateStatus={updateStatus}
             />
             <FocusPeriodList
               label="Tarde / Noite"
@@ -933,7 +1051,10 @@ function FocusMode({
               patients={patients}
               professionals={professionals}
               procedures={procedures}
-              onSelect={onSelectAppointment}
+              busyId={busyId}
+              onOpen={onSelectAppointment}
+              onEdit={onEdit}
+              onUpdateStatus={updateStatus}
             />
           </div>
         )}
@@ -949,7 +1070,10 @@ function FocusPeriodList({
   patients,
   professionals,
   procedures,
-  onSelect,
+  busyId,
+  onOpen,
+  onEdit,
+  onUpdateStatus,
 }: {
   label: string;
   icon: any;
@@ -957,7 +1081,10 @@ function FocusPeriodList({
   patients: Record<string, Patient>;
   professionals: Record<string, Professional>;
   procedures: Record<string, ProfessionalService>;
-  onSelect: (a: Appointment) => void;
+  busyId: string | null;
+  onOpen: (a: Appointment) => void;
+  onEdit: (a: Appointment) => void;
+  onUpdateStatus: (a: Appointment, status: AppointmentStatus) => void | Promise<void>;
 }) {
   if (items.length === 0) {
     return (
@@ -984,51 +1111,175 @@ function FocusPeriodList({
         <span className="text-[10px] font-bold text-slate-400">{items.length}</span>
       </div>
       <div className="divide-y divide-slate-50">
-        {items.map((a) => {
-          const patient = patients[a.patientId];
-          const prof = professionals[a.professionalId];
-          const service = procedures[a.serviceId];
-          const start = new Date(a.startTime);
-          return (
-            <button
-              key={a.id}
-              onClick={() => onSelect(a)}
-              className="w-full flex items-center gap-6 py-5 group text-left transition-colors hover:bg-slate-50/40 -mx-2 px-2 rounded-lg"
-            >
-              <div className="w-16 shrink-0">
-                <div className="text-2xl font-bold tracking-tight text-slate-900 leading-none">
-                  {format(start, 'HH:mm')}
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900 truncate group-hover:text-emerald-700 transition-colors">
-                  {patient?.name || 'Paciente'}
-                </p>
-                <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
-                  {service?.name || 'Atendimento'}
-                  {prof?.name ? ` · ${prof.name}` : ''}
-                </p>
-              </div>
-              <span
-                className={cn(
-                  'text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md shrink-0',
-                  a.status === 'completed'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : a.status === 'checked-in'
-                    ? 'bg-blue-50 text-blue-700'
-                    : a.status === 'confirmed'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-slate-100 text-slate-500'
-                )}
-              >
-                {a.status === 'completed' ? 'Concluído' :
-                 a.status === 'checked-in' ? 'Em atendimento' :
-                 a.status === 'confirmed' ? 'Confirmado' :
-                 a.status === 'no-show' ? 'Não compareceu' : 'Agendado'}
-              </span>
-            </button>
-          );
-        })}
+        {items.map((a) => (
+          <FocusItemRow
+            key={a.id}
+            appointment={a}
+            patient={patients[a.patientId]}
+            professional={professionals[a.professionalId]}
+            service={procedures[a.serviceId]}
+            busy={busyId === a.id}
+            onOpen={() => onOpen(a)}
+            onEdit={() => onEdit(a)}
+            onUpdateStatus={(s) => onUpdateStatus(a, s)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface FocusItemRowProps {
+  appointment: Appointment;
+  patient?: Patient;
+  professional?: Professional;
+  service?: ProfessionalService;
+  busy: boolean;
+  onOpen: () => void;
+  onEdit: () => void;
+  onUpdateStatus: (s: AppointmentStatus) => void | Promise<void>;
+  key?: any;
+}
+
+function FocusItemRow({
+  appointment,
+  patient,
+  professional,
+  service,
+  busy,
+  onOpen,
+  onEdit,
+  onUpdateStatus,
+}: FocusItemRowProps) {
+  const start = new Date(appointment.startTime);
+  const status = appointment.status;
+  const isCancelled = status === 'cancelled';
+
+  const statusBadge = (
+    <span
+      className={cn(
+        'text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md shrink-0',
+        status === 'completed'
+          ? 'bg-emerald-50 text-emerald-700'
+          : status === 'checked-in'
+          ? 'bg-blue-50 text-blue-700'
+          : status === 'confirmed'
+          ? 'bg-emerald-50 text-emerald-700'
+          : status === 'cancelled'
+          ? 'bg-rose-50 text-rose-700'
+          : status === 'no-show'
+          ? 'bg-amber-50 text-amber-700'
+          : 'bg-slate-100 text-slate-500'
+      )}
+    >
+      {status === 'completed'
+        ? 'Concluído'
+        : status === 'checked-in'
+        ? 'Em atendimento'
+        : status === 'confirmed'
+        ? 'Confirmado'
+        : status === 'cancelled'
+        ? 'Cancelado'
+        : status === 'no-show'
+        ? 'Não compareceu'
+        : 'Agendado'}
+    </span>
+  );
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-4 py-4 group transition-colors -mx-2 px-2 rounded-lg',
+        isCancelled ? 'opacity-50' : 'hover:bg-slate-50/40'
+      )}
+    >
+      <button
+        onClick={onOpen}
+        className="flex items-center gap-4 flex-1 min-w-0 text-left"
+      >
+        <div className="w-16 shrink-0">
+          <div className={cn('text-2xl font-bold tracking-tight leading-none', isCancelled ? 'text-slate-400 line-through' : 'text-slate-900')}>
+            {format(start, 'HH:mm')}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p
+            className={cn(
+              'font-bold truncate transition-colors',
+              isCancelled ? 'text-slate-400 line-through' : 'text-slate-900 group-hover:text-emerald-700'
+            )}
+          >
+            {patient?.name || 'Paciente'}
+          </p>
+          <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+            {service?.name || 'Atendimento'}
+            {professional?.name ? ` · ${professional.name}` : ''}
+            {patient?.phone ? ` · ${patient.phone}` : ''}
+          </p>
+        </div>
+      </button>
+
+      {statusBadge}
+
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        {!isCancelled && status !== 'confirmed' && status !== 'completed' && (
+          <button
+            disabled={busy}
+            onClick={() => onUpdateStatus('confirmed')}
+            title="Confirmar"
+            className="w-8 h-8 rounded-full hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 flex items-center justify-center transition-colors"
+          >
+            <CheckCircle size={16} />
+          </button>
+        )}
+        {!isCancelled && (status === 'confirmed' || status === 'scheduled') && (
+          <button
+            disabled={busy}
+            onClick={() => onUpdateStatus('checked-in')}
+            title="Em atendimento"
+            className="w-8 h-8 rounded-full hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition-colors"
+          >
+            <Clock size={16} />
+          </button>
+        )}
+        {!isCancelled && status !== 'completed' && (
+          <button
+            disabled={busy}
+            onClick={() => onUpdateStatus('completed')}
+            title="Concluir"
+            className="w-8 h-8 rounded-full hover:bg-emerald-50 text-slate-400 hover:text-emerald-700 flex items-center justify-center transition-colors"
+          >
+            <CalendarCheck size={16} />
+          </button>
+        )}
+        <button
+          disabled={busy}
+          onClick={onEdit}
+          title="Editar / Remarcar"
+          className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-900 flex items-center justify-center transition-colors"
+        >
+          <Edit2 size={14} />
+        </button>
+        {!isCancelled && (
+          <button
+            disabled={busy}
+            onClick={() => onUpdateStatus('cancelled')}
+            title="Cancelar"
+            className="w-8 h-8 rounded-full hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors"
+          >
+            <X size={16} />
+          </button>
+        )}
+        {isCancelled && (
+          <button
+            disabled={busy}
+            onClick={() => onUpdateStatus('scheduled')}
+            title="Restaurar"
+            className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-emerald-600 flex items-center justify-center transition-colors"
+          >
+            <RotateCcw size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

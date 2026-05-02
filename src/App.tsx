@@ -41,8 +41,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './lib/firebase';
 import { cn } from './lib/utils';
-import { Clinic, OperationType } from './types';
+import { Clinic, OperationType, COMMON_TIMEZONES, DEFAULT_TIMEZONE } from './types';
 import { seedClinicData } from './lib/seedData';
+import { doc, updateDoc } from 'firebase/firestore';
 
 // New Components
 import { ProfessionalsView } from './components/ProfessionalsView';
@@ -101,6 +102,7 @@ export default function App() {
   
   // Modals state
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+  const [isClinicSettingsOpen, setIsClinicSettingsOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -212,7 +214,14 @@ export default function App() {
             />
           </nav>
 
-          <footer className="pt-6 border-t border-slate-50 mt-auto">
+          <footer className="pt-6 border-t border-slate-50 mt-auto space-y-2">
+             <button
+               onClick={() => setIsClinicSettingsOpen(true)}
+               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+             >
+               <Settings size={14} className="text-slate-300" />
+               Configurações da Clínica
+             </button>
              <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between group hover:bg-slate-100 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative">
@@ -303,10 +312,17 @@ export default function App() {
 
       <AnimatePresence>
         {isAppointmentModalOpen && (
-          <NewAppointmentModal 
-            clinicId={clinic.id} 
-            onClose={() => setIsAppointmentModalOpen(false)} 
-            onSuccess={() => setIsAppointmentModalOpen(false)} 
+          <NewAppointmentModal
+            clinicId={clinic.id}
+            onClose={() => setIsAppointmentModalOpen(false)}
+            onSuccess={() => setIsAppointmentModalOpen(false)}
+          />
+        )}
+        {isClinicSettingsOpen && (
+          <ClinicSettingsModal
+            clinic={clinic}
+            onClose={() => setIsClinicSettingsOpen(false)}
+            onSaved={(c) => { setClinic(c); setIsClinicSettingsOpen(false); }}
           />
         )}
       </AnimatePresence>
@@ -369,6 +385,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 function CreateClinicScreen({ onCreated }: { onCreated: (c: Clinic) => void }) {
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -379,11 +396,18 @@ function CreateClinicScreen({ onCreated }: { onCreated: (c: Clinic) => void }) {
       const docRef = await addDoc(collection(db, 'clinics'), {
         name,
         whatsappNumber: whatsapp,
+        timezone,
         adminEmail: auth.currentUser.email,
         createdAt: serverTimestamp(),
-        settings: { theme: 'emerald' }
+        settings: { theme: 'emerald' },
       });
-      onCreated({ id: docRef.id, name, whatsappNumber: whatsapp, adminEmail: auth.currentUser.email! });
+      onCreated({
+        id: docRef.id,
+        name,
+        whatsappNumber: whatsapp,
+        timezone,
+        adminEmail: auth.currentUser.email!,
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'clinics');
     } finally {
@@ -423,14 +447,27 @@ function CreateClinicScreen({ onCreated }: { onCreated: (c: Clinic) => void }) {
 
           <div className="space-y-2">
             <label className="text-[10px] font-semibold text-slate-400 ml-1">Conexão WhatsApp</label>
-            <input 
-              type="tel" 
+            <input
+              type="tel"
               value={whatsapp}
               onChange={(e) => setWhatsapp(e.target.value)}
               className="w-full px-5 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-lg outline-none transition-all font-semibold text-slate-900 placeholder:text-slate-300"
               placeholder="DDD + Número (ex: 11999999999)"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold text-slate-400 ml-1">Fuso Horário</label>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full px-5 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-lg outline-none transition-all font-semibold text-slate-900 cursor-pointer"
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz.id} value={tz.id}>{tz.label}</option>
+              ))}
+            </select>
           </div>
 
           <button 
@@ -749,3 +786,135 @@ function CompactAppointmentItem({ name, time, procedure }: { name: string, time:
   );
 }
 
+
+function ClinicSettingsModal({
+  clinic,
+  onClose,
+  onSaved,
+}: {
+  clinic: Clinic;
+  onClose: () => void;
+  onSaved: (c: Clinic) => void;
+}) {
+  const [name, setName] = useState(clinic.name || '');
+  const [whatsapp, setWhatsapp] = useState(clinic.whatsappNumber || '');
+  const [address, setAddress] = useState(clinic.address || '');
+  const [timezone, setTimezone] = useState(clinic.timezone || DEFAULT_TIMEZONE);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'clinics', clinic.id), {
+        name,
+        whatsappNumber: whatsapp,
+        address,
+        timezone,
+        updatedAt: new Date().toISOString(),
+      });
+      onSaved({ ...clinic, name, whatsappNumber: whatsapp, address, timezone });
+    } catch (e) {
+      console.error('[clinic-settings] save failed', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Configurações da Clínica</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              Identidade, contato e fuso horário
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg">
+            <ChevronRight size={18} className="text-slate-300 rotate-180" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nome da Clínica</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">WhatsApp Principal</label>
+            <input
+              type="tel"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="DDD + Número"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Endereço</label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Rua, número, cidade"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Fuso Horário</label>
+            <p className="text-xs text-slate-500 ml-1">
+              Usado para todos os horários de agendamentos e mensagens da IA. Padrão: Brasília.
+            </p>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz.id} value={tz.id}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-300 text-white font-bold text-sm rounded-xl transition-all active:scale-95"
+          >
+            {saving ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}

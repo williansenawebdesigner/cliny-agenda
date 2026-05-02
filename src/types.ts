@@ -12,8 +12,23 @@ export interface Clinic {
   address?: string;
   whatsappNumber?: string;
   adminEmail: string;
+  timezone?: string; // IANA timezone, e.g. "America/Sao_Paulo"
   settings?: any;
 }
+
+export const DEFAULT_TIMEZONE = 'America/Sao_Paulo';
+
+export const COMMON_TIMEZONES: { id: string; label: string }[] = [
+  { id: 'America/Sao_Paulo', label: 'Brasília (GMT-3)' },
+  { id: 'America/Manaus', label: 'Manaus (GMT-4)' },
+  { id: 'America/Cuiaba', label: 'Cuiabá (GMT-4)' },
+  { id: 'America/Rio_Branco', label: 'Rio Branco (GMT-5)' },
+  { id: 'America/Noronha', label: 'Fernando de Noronha (GMT-2)' },
+  { id: 'America/Belem', label: 'Belém (GMT-3)' },
+  { id: 'America/Fortaleza', label: 'Fortaleza (GMT-3)' },
+  { id: 'America/Recife', label: 'Recife (GMT-3)' },
+  { id: 'UTC', label: 'UTC' },
+];
 
 export interface ProfessionalService {
   id: string;

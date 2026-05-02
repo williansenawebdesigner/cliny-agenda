@@ -47,6 +47,7 @@ interface AgentRunInput {
   basePrompt: string;
   agent: AgentConfig;
   clinicName?: string;
+  timezone: string;
   professionalId?: string | null;
   pushName?: string | null;
   userMessage: string;
@@ -74,6 +75,7 @@ async function runAgent(input: AgentRunInput) {
       basePrompt: input.basePrompt,
       agent: input.agent,
       clinicName: input.clinicName,
+      timezone: input.timezone,
     });
 
     let reply = '';
@@ -90,6 +92,7 @@ async function runAgent(input: AgentRunInput) {
           professionalId: input.professionalId ?? null,
           remoteJid: input.jid,
           pushName: input.pushName ?? null,
+          timezone: input.timezone,
         },
       });
     } catch (err) {
@@ -193,9 +196,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const agent: AgentConfig = { ...DEFAULT_AGENT, ...(instance.agent ?? {}) };
 
   let clinicName: string | undefined;
+  let clinicTimezone = 'America/Sao_Paulo';
   if (clinicId !== 'unknown') {
     const cSnap = await db.collection('clinics').doc(clinicId).get();
-    clinicName = cSnap.exists ? (cSnap.data() as any)?.name : undefined;
+    if (cSnap.exists) {
+      const cData = cSnap.data() as any;
+      clinicName = cData?.name;
+      if (typeof cData?.timezone === 'string' && cData.timezone) {
+        clinicTimezone = cData.timezone;
+      }
+    }
   }
 
   // Persist incoming message
@@ -246,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     agentDecision = 'no-text';
   } else if (!convAgentEnabled || !agent.enabled) {
     agentDecision = 'paused';
-  } else if (!isWithinWorkingHours(agent)) {
+  } else if (!isWithinWorkingHours(agent, clinicTimezone)) {
     agentDecision = 'off-hours';
     if (agent.workingHours?.outOfHoursMessage) {
       try {
@@ -283,6 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         basePrompt,
         agent,
         clinicName,
+        timezone: clinicTimezone,
         professionalId: instance.professionalId ?? null,
         pushName: messageData?.pushName ?? null,
         userMessage: content,

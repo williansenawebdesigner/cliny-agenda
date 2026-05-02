@@ -1,12 +1,22 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { Type, type FunctionDeclaration } from '@google/genai';
+import {
+  DEFAULT_TIMEZONE,
+  dayOfWeekInTz,
+  endOfDayInTz,
+  fromZonedTime,
+  hmInTz,
+  humanInTz,
+  startOfDayInTz,
+} from './tz.js';
 
 export interface ToolContext {
   db: Firestore;
   clinicId: string;
-  professionalId?: string | null; // optional bound professional for the instance
-  remoteJid: string; // patient WhatsApp jid for fallback contact
+  professionalId?: string | null;
+  remoteJid: string;
   pushName?: string | null;
+  timezone: string;
 }
 
 export interface ToolResult {
@@ -27,19 +37,17 @@ function pad(n: number) {
   return n.toString().padStart(2, '0');
 }
 
-function dayKeyForDate(d: Date): string {
-  // "monday".."sunday" — match the structure most clinic apps use
-  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  return days[d.getDay()];
-}
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 function buildSlotsForProfessional(
   schedule: Record<string, string[]> | undefined,
-  date: Date,
+  ymd: string,
+  tz: string,
   durationMin: number
 ): string[] {
+  const dayIndex = dayOfWeekInTz(startOfDayInTz(ymd, tz), tz);
+  const key = DAY_KEYS[dayIndex];
   if (!schedule) {
-    // Fallback: 09:00–18:00 every 30 min
     const out: string[] = [];
     for (let h = 9; h < 18; h++) {
       out.push(`${pad(h)}:00`);
@@ -47,7 +55,6 @@ function buildSlotsForProfessional(
     }
     return out;
   }
-  const key = dayKeyForDate(date);
   return schedule[key] ?? [];
 }
 
@@ -130,8 +137,7 @@ async function listAvailableSlots(
   ctx: ToolContext,
   args: { date: string; serviceId?: string; professionalId?: string }
 ): Promise<ToolResult> {
-  const date = new Date(args.date + 'T00:00:00');
-  if (isNaN(date.getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.date)) {
     return { ok: false, error: `Invalid date: ${args.date} (use YYYY-MM-DD)` };
   }
 
@@ -142,7 +148,7 @@ async function listAvailableSlots(
     args.serviceId && (prof.services ?? []).find((s: any) => s.id === args.serviceId);
   const durationMin = service?.duration ?? 30;
 
-  const allSlots = buildSlotsForProfessional(prof.schedule, date, durationMin);
+  const allSlots = buildSlotsForProfessional(prof.schedule, args.date, ctx.timezone, durationMin);
   if (allSlots.length === 0) {
     return {
       ok: true,
@@ -150,16 +156,15 @@ async function listAvailableSlots(
         date: args.date,
         professionalId: prof.id,
         professionalName: prof.name,
+        timezone: ctx.timezone,
         availableSlots: [],
         reason: 'Professional has no schedule configured for this weekday.',
       },
     };
   }
 
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
+  const dayStart = startOfDayInTz(args.date, ctx.timezone);
+  const dayEnd = endOfDayInTz(args.date, ctx.timezone);
 
   const apptSnap = await ctx.db
     .collection('appointments')
@@ -174,7 +179,7 @@ async function listAvailableSlots(
     const data = d.data() as any;
     if (data.status === 'cancelled') return;
     const start = new Date(data.startTime);
-    taken.add(`${pad(start.getHours())}:${pad(start.getMinutes())}`);
+    taken.add(hmInTz(start, ctx.timezone));
   });
 
   const available = allSlots.filter((s) => !taken.has(s));
@@ -185,6 +190,7 @@ async function listAvailableSlots(
       date: args.date,
       professionalId: prof.id,
       professionalName: prof.name,
+      timezone: ctx.timezone,
       durationMin,
       availableSlots: available,
     },
@@ -214,7 +220,7 @@ async function createAppointment(
     };
   }
 
-  const startTime = new Date(`${args.date}T${args.time}:00`);
+  const startTime = fromZonedTime(args.date, args.time, ctx.timezone);
   if (isNaN(startTime.getTime())) {
     return { ok: false, error: `Invalid date/time: ${args.date} ${args.time}` };
   }
@@ -272,7 +278,9 @@ async function createAppointment(
       patientCreated: created,
       professionalName: prof.name,
       serviceName: service.name,
-      startTime: startTime.toISOString(),
+      startTimeUtc: startTime.toISOString(),
+      startTimeLocal: humanInTz(startTime, ctx.timezone),
+      timezone: ctx.timezone,
       durationMin: service.duration ?? 30,
       price: service.price ?? 0,
     },
@@ -304,15 +312,17 @@ async function listPatientAppointments(
     .get();
   const appointments = apptSnap.docs.map((d) => {
     const a = d.data() as any;
+    const startDate = new Date(a.startTime);
     return {
       appointmentId: d.id,
-      startTime: a.startTime,
+      startTimeUtc: a.startTime,
+      startTimeLocal: humanInTz(startDate, ctx.timezone),
       status: a.status,
       professionalId: a.professionalId,
       serviceId: a.serviceId,
     };
   });
-  return { ok: true, data: { patientId: patient.id, patientName: (patient.data() as any).name, appointments } };
+  return { ok: true, data: { patientId: patient.id, patientName: (patient.data() as any).name, timezone: ctx.timezone, appointments } };
 }
 
 async function cancelAppointment(
