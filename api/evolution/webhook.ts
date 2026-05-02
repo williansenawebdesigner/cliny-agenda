@@ -7,6 +7,7 @@ import {
   AgentConfig,
   DEFAULT_AGENT,
   buildSystemPrompt,
+  detectsEscalation,
   generateAgentReply,
   isWithinWorkingHours,
   loadRecentHistory,
@@ -80,21 +81,26 @@ async function runAgent(input: AgentRunInput) {
 
     let reply = '';
     try {
-      reply = await generateAgentReply({
+      const result = await generateAgentReply({
         apiKey: process.env.GEMINI_API_KEY,
         systemPrompt,
         history,
         userMessage: input.userMessage,
-        model: input.agent.model,
+        agent: input.agent,
         toolContext: {
           db,
           clinicId: input.clinicId,
+          instanceName: input.instanceName,
           professionalId: input.professionalId ?? null,
           remoteJid: input.jid,
           pushName: input.pushName ?? null,
           timezone: input.timezone,
         },
       });
+      reply = result.text;
+      if (result.transferred) {
+        console.log('[agent] conversation transferred to human');
+      }
     } catch (err) {
       console.error('[agent] generation failed', err);
       reply = input.agent.fallbackMessage || '';
@@ -282,6 +288,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } else if (!process.env.GEMINI_API_KEY) {
     agentDecision = 'no-gemini-key';
+  } else if (detectsEscalation(agent, content)) {
+    agentDecision = 'escalated';
+    try {
+      // Pause this conversation
+      await convRef.set(
+        {
+          agentEnabled: false,
+          transferredToHumanAt: new Date().toISOString(),
+          transferReason: 'keyword',
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      const env = getEvolutionEnv(res);
+      const note = agent.escalation?.notifyMessage?.trim();
+      if (env && note) {
+        await sendText(env, instanceName, jid, note);
+        await db.collection('whatsapp_messages').add({
+          instanceName,
+          clinicId,
+          remoteJid: jid,
+          fromMe: true,
+          messageType: 'conversation',
+          content: note,
+          audioBase64: null,
+          messageTimestamp: Math.floor(Date.now() / 1000),
+          createdAt: new Date().toISOString(),
+          source: 'agent',
+        });
+      }
+    } catch (e) {
+      console.error('[webhook] escalation handling failed', e);
+    }
   } else {
     agentDecision = 'running';
     // KEY FIX: waitUntil keeps the process alive after we respond.

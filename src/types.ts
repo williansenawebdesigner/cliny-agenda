@@ -48,20 +48,70 @@ export interface Professional {
   services?: ProfessionalService[];
 }
 
+export type AgentLanguage = 'pt-BR' | 'en' | 'es';
+export type AgentFormality = 'tu' | 'voce' | 'senhor';
+export type AgentResponseSize = 'short' | 'medium' | 'long';
+export type AgentEmojiUse = 'never' | 'light' | 'free';
+
+export interface AgentTriggers {
+  onAppointmentCreated?: string; // template w/ {paciente} {data} {hora} {profissional} {servico}
+  onAppointmentCancelled?: string;
+  onNoShow?: string;
+  onPostConsultation?: string;
+}
+
+export interface AgentTools {
+  list_services?: boolean;
+  list_available_slots?: boolean;
+  create_appointment?: boolean;
+  list_patient_appointments?: boolean;
+  cancel_appointment?: boolean;
+  transfer_to_human?: boolean;
+}
+
+export interface AgentEscalation {
+  enabled: boolean;
+  keywords: string[]; // when patient sends one of these, auto-pause agent
+  notifyMessage?: string; // sent to patient confirming the transfer
+}
+
 export interface AgentConfig {
   enabled: boolean;
-  model?: string; // e.g. "gemini-2.5-flash"
-  persona?: string; // tone / personality
-  knowledgeBase?: string; // free-text FAQ / clinic info (lightweight RAG)
-  responseDelayMin?: number; // seconds before reply
+  model?: string;
+  persona?: string;
+  knowledgeBase?: string;
+  responseDelayMin?: number;
   responseDelayMax?: number;
-  showTyping?: boolean; // send presence "composing" while thinking
-  fallbackMessage?: string; // when AI fails
+  showTyping?: boolean;
+  fallbackMessage?: string;
+
+  // -- Tone & style ----------------------------------------------------------
+  language?: AgentLanguage;
+  formality?: AgentFormality;
+  responseSize?: AgentResponseSize;
+  emojiUse?: AgentEmojiUse;
+  temperature?: number; // 0..1
+  maxOutputTokens?: number; // 256..4096
+  greetingMessage?: string; // optional, only sent if conversation has no prior msgs
+  signature?: string; // appended after every reply
+
+  // -- Boundaries ------------------------------------------------------------
+  forbiddenTopics?: string[]; // free text bullets
+
+  // -- Triggers --------------------------------------------------------------
+  triggers?: AgentTriggers;
+
+  // -- Tools toggle ----------------------------------------------------------
+  tools?: AgentTools;
+
+  // -- Human escalation ------------------------------------------------------
+  escalation?: AgentEscalation;
+
   workingHours?: {
     enabled: boolean;
-    start: string; // "08:00"
-    end: string; // "18:00"
-    weekdays: number[]; // 0=Sun..6=Sat
+    start: string;
+    end: string;
+    weekdays: number[];
     outOfHoursMessage?: string;
   };
 }
@@ -132,6 +182,42 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   showTyping: true,
   fallbackMessage:
     'Desculpe, tive um problema técnico. Em instantes um atendente humano entrará em contato.',
+
+  language: 'pt-BR',
+  formality: 'voce',
+  responseSize: 'medium',
+  emojiUse: 'light',
+  temperature: 0.5,
+  maxOutputTokens: 800,
+  greetingMessage: '',
+  signature: '',
+
+  forbiddenTopics: [],
+
+  triggers: {
+    onAppointmentCreated:
+      'Confirmado, {paciente}! Sua consulta de {servico} foi agendada para {data} às {hora} com {profissional}. Até breve! 🩺',
+    onAppointmentCancelled: '',
+    onNoShow: '',
+    onPostConsultation: '',
+  },
+
+  tools: {
+    list_services: true,
+    list_available_slots: true,
+    create_appointment: true,
+    list_patient_appointments: true,
+    cancel_appointment: true,
+    transfer_to_human: true,
+  },
+
+  escalation: {
+    enabled: true,
+    keywords: ['humano', 'atendente', 'falar com pessoa', 'reclamar', 'reclamação'],
+    notifyMessage:
+      'Tudo bem! Vou te transferir para um(a) atendente humano. Em instantes alguém da equipe responderá por aqui.',
+  },
+
   workingHours: {
     enabled: false,
     start: '08:00',

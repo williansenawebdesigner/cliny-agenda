@@ -13,6 +13,7 @@ import {
 export interface ToolContext {
   db: Firestore;
   clinicId: string;
+  instanceName: string;
   professionalId?: string | null;
   remoteJid: string;
   pushName?: string | null;
@@ -325,6 +326,39 @@ async function listPatientAppointments(
   return { ok: true, data: { patientId: patient.id, patientName: (patient.data() as any).name, timezone: ctx.timezone, appointments } };
 }
 
+async function transferToHuman(
+  ctx: ToolContext,
+  args: { reason?: string }
+): Promise<ToolResult> {
+  try {
+    await ctx.db
+      .collection('whatsapp_conversations')
+      .doc(`${ctx.instanceName}__${ctx.remoteJid}`)
+      .set(
+        {
+          clinicId: ctx.clinicId,
+          instanceName: ctx.instanceName,
+          remoteJid: ctx.remoteJid,
+          agentEnabled: false,
+          transferredToHumanAt: new Date().toISOString(),
+          transferReason: args.reason ?? null,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+  } catch (err) {
+    console.warn('[transferToHuman] could not persist pause', err);
+  }
+  return {
+    ok: true,
+    data: {
+      transferred: true,
+      conversationPaused: true,
+      reason: args.reason ?? 'patient requested human assistance',
+    },
+  };
+}
+
 async function cancelAppointment(
   ctx: ToolContext,
   args: { appointmentId: string; reason?: string }
@@ -429,6 +463,20 @@ export const toolDeclarations: FunctionDeclaration[] = [
       required: ['appointmentId'],
     },
   },
+  {
+    name: 'transfer_to_human',
+    description:
+      'Transfere a conversa para um(a) atendente humano(a). Use quando o paciente pedir explicitamente, quando detectar reclamação séria, urgência médica, ou quando você não conseguir resolver após 2-3 tentativas. Após chamar esta função, a IA é pausada automaticamente nesta conversa e um humano assume.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        reason: {
+          type: Type.STRING,
+          description: 'Motivo da transferência (ex: "paciente pediu atendente", "urgência médica", "reclamação")',
+        },
+      },
+    },
+  },
 ];
 
 export async function executeTool(
@@ -448,6 +496,8 @@ export async function executeTool(
         return await listPatientAppointments(ctx, args);
       case 'cancel_appointment':
         return await cancelAppointment(ctx, args);
+      case 'transfer_to_human':
+        return await transferToHuman(ctx, args);
       default:
         return { ok: false, error: `Unknown tool: ${name}` };
     }

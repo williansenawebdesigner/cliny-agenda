@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Clock, Sparkles } from 'lucide-react';
+import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Clock, Sparkles, MessageCircle, AlertTriangle, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from '../lib/firebase';
 import { WhatsAppInstance, Professional, AgentConfig, DEFAULT_AGENT_CONFIG } from '../types';
@@ -414,7 +414,9 @@ function InstanceModal({
   );
   const [agent, setAgent] = useState<AgentConfig>(initialAgent);
   const [submitting, setSubmitting] = useState(false);
-  const [tab, setTab] = useState<'identity' | 'agent' | 'hours'>('identity');
+  const [tab, setTab] = useState<
+    'identity' | 'agent' | 'comm' | 'messages' | 'escalation' | 'tools' | 'hours'
+  >('identity');
 
   const updateAgent = (patch: Partial<AgentConfig>) => setAgent((c) => ({ ...c, ...patch }));
   const updateHours = (patch: Partial<NonNullable<AgentConfig['workingHours']>>) =>
@@ -495,11 +497,15 @@ function InstanceModal({
             </button>
           </div>
 
-          <div className="flex gap-1 bg-slate-50 p-1 rounded-xl">
+          <div className="flex gap-1 bg-slate-50 p-1 rounded-xl overflow-x-auto no-scrollbar">
             {(
               [
                 ['identity', 'Identidade', <Phone size={14} key="i" />],
-                ['agent', 'Agente IA', <Sparkles size={14} key="a" />],
+                ['agent', 'Agente', <Sparkles size={14} key="a" />],
+                ['comm', 'Comunicação', <MessageCircle size={14} key="c" />],
+                ['messages', 'Modelos', <Edit2 size={14} key="m" />],
+                ['tools', 'Ferramentas', <Wrench size={14} key="t" />],
+                ['escalation', 'Escalação', <AlertTriangle size={14} key="e" />],
                 ['hours', 'Horários', <Clock size={14} key="h" />],
               ] as const
             ).map(([key, label, icon]) => (
@@ -508,7 +514,7 @@ function InstanceModal({
                 type="button"
                 onClick={() => setTab(key)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
+                  'shrink-0 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap',
                   tab === key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                 )}
               >
@@ -654,6 +660,295 @@ function InstanceModal({
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-medium text-sm text-slate-900"
                   placeholder="Mensagem enviada quando o agente falha"
                 />
+              </div>
+            </div>
+          )}
+
+          {tab === 'comm' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Idioma</label>
+                  <select
+                    value={agent.language || 'pt-BR'}
+                    onChange={(e) => updateAgent({ language: e.target.value as any })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
+                  >
+                    <option value="pt-BR">Português (Brasil)</option>
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Formalidade</label>
+                  <select
+                    value={agent.formality || 'voce'}
+                    onChange={(e) => updateAgent({ formality: e.target.value as any })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
+                  >
+                    <option value="tu">Tu (informal regional)</option>
+                    <option value="voce">Você (informal padrão)</option>
+                    <option value="senhor">Senhor / Senhora (formal)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tamanho da resposta</label>
+                  <select
+                    value={agent.responseSize || 'medium'}
+                    onChange={(e) => updateAgent({ responseSize: e.target.value as any })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
+                  >
+                    <option value="short">Curto (1-2 frases)</option>
+                    <option value="medium">Médio (até 3 parágrafos)</option>
+                    <option value="long">Longo (detalhado)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Uso de emojis</label>
+                  <select
+                    value={agent.emojiUse || 'light'}
+                    onChange={(e) => updateAgent({ emojiUse: e.target.value as any })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
+                  >
+                    <option value="never">Nunca</option>
+                    <option value="light">Leve (1 por resposta)</option>
+                    <option value="free">Livre</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Criatividade (temperature: {agent.temperature ?? 0.5})
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={agent.temperature ?? 0.5}
+                    onChange={(e) => updateAgent({ temperature: Number(e.target.value) })}
+                    className="w-full accent-emerald-500"
+                  />
+                  <div className="flex justify-between text-[10px] font-bold text-slate-300 px-1">
+                    <span>Determinístico</span>
+                    <span>Criativo</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Tokens máximos por resposta
+                  </label>
+                  <input
+                    type="number"
+                    min={128}
+                    max={4096}
+                    step={64}
+                    value={agent.maxOutputTokens ?? 800}
+                    onChange={(e) => updateAgent({ maxOutputTokens: Number(e.target.value) })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Assinatura (opcional)</label>
+                <input
+                  type="text"
+                  value={agent.signature || ''}
+                  onChange={(e) => updateAgent({ signature: e.target.value })}
+                  placeholder="Ex: — Equipe Cliny"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-medium text-sm text-slate-900"
+                />
+                <p className="text-xs text-slate-400 ml-1">Será adicionada ao final de cada resposta automaticamente.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                  Tópicos proibidos (1 por linha)
+                </label>
+                <textarea
+                  rows={4}
+                  value={(agent.forbiddenTopics ?? []).join('\n')}
+                  onChange={(e) =>
+                    updateAgent({ forbiddenTopics: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })
+                  }
+                  placeholder={'Ex:\nDiagnósticos médicos\nReceitas de medicamentos\nQuestões legais'}
+                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {tab === 'messages' && (
+            <div className="space-y-6">
+              <p className="text-xs text-slate-500 ml-1 leading-relaxed">
+                Modelos enviados pela IA em momentos específicos. Use os marcadores
+                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{paciente}'}</code>
+                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{data}'}</code>
+                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{hora}'}</code>
+                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{profissional}'}</code>
+                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{servico}'}</code>
+                — eles serão substituídos no envio.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                  Após confirmar agendamento
+                </label>
+                <textarea
+                  rows={3}
+                  value={agent.triggers?.onAppointmentCreated || ''}
+                  onChange={(e) =>
+                    updateAgent({ triggers: { ...(agent.triggers ?? {}), onAppointmentCreated: e.target.value } })
+                  }
+                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                  Após cancelar agendamento
+                </label>
+                <textarea
+                  rows={3}
+                  value={agent.triggers?.onAppointmentCancelled || ''}
+                  onChange={(e) =>
+                    updateAgent({ triggers: { ...(agent.triggers ?? {}), onAppointmentCancelled: e.target.value } })
+                  }
+                  placeholder="Ex: Tudo certo, {paciente}. Sua consulta de {data} às {hora} foi cancelada."
+                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                  Mensagem de saudação inicial (opcional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={agent.greetingMessage || ''}
+                  onChange={(e) => updateAgent({ greetingMessage: e.target.value })}
+                  placeholder="Texto enviado uma única vez quando o paciente fala com a clínica pela primeira vez."
+                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {tab === 'tools' && (
+            <div className="space-y-6">
+              <p className="text-xs text-slate-500 ml-1 leading-relaxed">
+                Habilite ou desabilite cada habilidade do agente. Quando desligada, a IA não poderá realizar a ação.
+              </p>
+              {(
+                [
+                  ['list_services', 'Listar serviços e preços', 'Recomendado deixar ativo.'],
+                  ['list_available_slots', 'Listar horários disponíveis', 'Necessário para sugerir horários.'],
+                  ['create_appointment', 'Criar agendamento', 'Desligue se quiser que a IA apenas sugira (humano confirma).'],
+                  ['list_patient_appointments', 'Ver agendamentos do paciente', ''],
+                  ['cancel_appointment', 'Cancelar agendamento', ''],
+                  ['transfer_to_human', 'Transferir para humano', 'Pausa a IA na conversa.'],
+                ] as const
+              ).map(([key, label, hint]) => {
+                const tools = agent.tools ?? {};
+                const value = (tools as any)[key] !== false;
+                return (
+                  <div key={key} className="flex items-start justify-between p-4 bg-slate-50 rounded-xl">
+                    <div className="flex-1 min-w-0 mr-4">
+                      <p className="text-sm font-bold text-slate-900">{label}</p>
+                      {hint && <p className="text-xs text-slate-500 mt-0.5">{hint}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateAgent({ tools: { ...tools, [key]: !value } })}
+                      className={cn('relative w-12 h-7 rounded-full transition-colors shrink-0', value ? 'bg-emerald-500' : 'bg-slate-300')}
+                    >
+                      <span className={cn('absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform', value ? 'left-6' : 'left-1')} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {tab === 'escalation' && (
+            <div className="space-y-6">
+              <div className="flex items-start justify-between p-4 bg-slate-50 rounded-xl">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Detectar palavras-chave</p>
+                  <p className="text-xs text-slate-500">
+                    Quando o paciente mandar uma destas palavras, a IA pausa nesta conversa e envia a mensagem de transferência.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateAgent({
+                      escalation: {
+                        ...(agent.escalation ?? { enabled: false, keywords: [] }),
+                        enabled: !(agent.escalation?.enabled ?? false),
+                      },
+                    })
+                  }
+                  className={cn(
+                    'relative w-12 h-7 rounded-full transition-colors shrink-0',
+                    agent.escalation?.enabled ? 'bg-emerald-500' : 'bg-slate-300'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                      agent.escalation?.enabled ? 'left-6' : 'left-1'
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className={cn('space-y-4', !agent.escalation?.enabled && 'opacity-40 pointer-events-none')}>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Palavras-chave (1 por linha)
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={(agent.escalation?.keywords ?? []).join('\n')}
+                    onChange={(e) =>
+                      updateAgent({
+                        escalation: {
+                          ...(agent.escalation ?? { enabled: true, keywords: [] }),
+                          keywords: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
+                        },
+                      })
+                    }
+                    placeholder={'humano\natendente\nfalar com pessoa\nreclamar'}
+                    className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Mensagem ao transferir
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={agent.escalation?.notifyMessage || ''}
+                    onChange={(e) =>
+                      updateAgent({
+                        escalation: {
+                          ...(agent.escalation ?? { enabled: true, keywords: [] }),
+                          notifyMessage: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="Texto enviado ao paciente confirmando que um humano vai atender."
+                    className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
+                  />
+                </div>
               </div>
             </div>
           )}
