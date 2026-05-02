@@ -57,7 +57,7 @@ export function buildSystemPrompt(opts: {
     'Sempre responda em português do Brasil. Seja breve, claro e objetivo.',
     'Use no máximo 3 parágrafos curtos. Evite listas longas. Não use markdown.',
     todayContext(tz),
-    `Sempre que mencionar horários ao paciente, use o horário local da clínica (${tz}). Os campos "startTimeLocal" das ferramentas já estão nesse fuso — use-os, NÃO converta novamente.`,
+    `Sempre que mencionar horários ao paciente, use o horário local da clínica (${tz}) e sempre sugira horarios disponíveis baseando-se no dia que ela deseja ou agenda mais próxima. Os campos "startTimeLocal" das ferramentas já estão nesse fuso — use-os, NÃO converta novamente.`,
     '',
     '## Capacidades',
     'Você TEM acesso a ferramentas para:',
