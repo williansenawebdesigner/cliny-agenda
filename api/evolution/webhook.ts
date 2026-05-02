@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { waitUntil } from '@vercel/functions';
 import { getDb } from '../_lib/firebase.js';
 import { getEvolutionEnv, getWebhookSecret } from '../_lib/evolution.js';
 import { sendPresence, sendText } from '../_lib/whatsapp.js';
@@ -12,6 +13,9 @@ import {
   pickReplyDelayMs,
   sleep,
 } from '../_lib/agent.js';
+
+// Allow long-running AI work (Hobby max 60s, Pro 300s).
+export const config = { maxDuration: 60 };
 
 function isAuthorized(req: VercelRequest): boolean {
   const expected = getWebhookSecret();
@@ -34,6 +38,108 @@ function normalizeEvent(raw: unknown): string {
 
 function conversationDocId(instanceName: string, jid: string) {
   return `${instanceName}__${jid}`;
+}
+
+interface AgentRunInput {
+  clinicId: string;
+  instanceName: string;
+  jid: string;
+  basePrompt: string;
+  agent: AgentConfig;
+  clinicName?: string;
+  professionalId?: string | null;
+  pushName?: string | null;
+  userMessage: string;
+}
+
+async function runAgent(input: AgentRunInput) {
+  const env = {
+    url: process.env.EVOLUTION_API_URL!,
+    apiKey: process.env.EVOLUTION_GLOBAL_API_KEY!,
+  };
+  if (!env.url || !env.apiKey) {
+    console.warn('[agent] missing Evolution env vars — skipping');
+    return;
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn('[agent] GEMINI_API_KEY missing — skipping');
+    return;
+  }
+
+  const db = getDb();
+
+  try {
+    const history = await loadRecentHistory(db, input.instanceName, input.jid, 20);
+    const systemPrompt = buildSystemPrompt({
+      basePrompt: input.basePrompt,
+      agent: input.agent,
+      clinicName: input.clinicName,
+    });
+
+    let reply = '';
+    try {
+      reply = await generateAgentReply({
+        apiKey: process.env.GEMINI_API_KEY,
+        systemPrompt,
+        history,
+        userMessage: input.userMessage,
+        model: input.agent.model,
+        toolContext: {
+          db,
+          clinicId: input.clinicId,
+          professionalId: input.professionalId ?? null,
+          remoteJid: input.jid,
+          pushName: input.pushName ?? null,
+        },
+      });
+    } catch (err) {
+      console.error('[agent] generation failed', err);
+      reply = input.agent.fallbackMessage || '';
+    }
+
+    if (!reply.trim()) {
+      console.warn('[agent] empty reply — nothing to send');
+      return;
+    }
+
+    const delayMs = pickReplyDelayMs(input.agent, reply);
+    if (input.agent.showTyping !== false) {
+      await sendPresence(env, input.instanceName, input.jid, 'composing', Math.min(delayMs, 25000));
+    }
+    await sleep(delayMs);
+
+    await sendText(env, input.instanceName, input.jid, reply);
+
+    const ts = Math.floor(Date.now() / 1000);
+    await db.collection('whatsapp_messages').add({
+      instanceName: input.instanceName,
+      clinicId: input.clinicId,
+      remoteJid: input.jid,
+      fromMe: true,
+      messageType: 'conversation',
+      content: reply,
+      audioBase64: null,
+      messageTimestamp: ts,
+      createdAt: new Date().toISOString(),
+      source: 'agent',
+    });
+
+    await db
+      .collection('whatsapp_conversations')
+      .doc(conversationDocId(input.instanceName, input.jid))
+      .set(
+        {
+          lastMessageAt: ts,
+          lastMessagePreview: reply.slice(0, 120),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+    console.log('[agent] reply sent', { jid: input.jid, len: reply.length });
+  } catch (err) {
+    console.error('[agent] unexpected error', err);
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -75,14 +181,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = getDb();
 
-  // 1) Resolve clinic + instance config
+  // Resolve instance + clinic
   const instSnap = await db
     .collection('whatsapp_instances')
     .where('instanceName', '==', instanceName)
     .limit(1)
     .get();
-  const instanceDoc = instSnap.empty ? null : instSnap.docs[0];
-  const instance = instanceDoc?.data() ?? {};
+  const instance = instSnap.empty ? {} : (instSnap.docs[0].data() as any);
   const clinicId: string = instance.clinicId ?? 'unknown';
   const basePrompt: string = instance.prompt ?? '';
   const agent: AgentConfig = { ...DEFAULT_AGENT, ...(instance.agent ?? {}) };
@@ -93,7 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clinicName = cSnap.exists ? (cSnap.data() as any)?.name : undefined;
   }
 
-  // 2) Persist incoming message
+  // Persist incoming message
   await db.collection('whatsapp_messages').add({
     instanceName,
     clinicId,
@@ -107,7 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     source: isFromMe ? 'user' : 'whatsapp',
   });
 
-  // 3) Upsert conversation summary
+  // Upsert conversation summary
   const convRef = db
     .collection('whatsapp_conversations')
     .doc(conversationDocId(instanceName, jid));
@@ -121,143 +226,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       remoteJid: jid,
       lastMessageAt: messageTimestamp,
       lastMessagePreview: content || (msgType === 'audio' ? 'Áudio' : '...'),
-      contactName:
-        existingConv?.contactName ||
-        messageData?.pushName ||
-        null,
-      // initialize agentEnabled defaulting to instance-level setting if not set
-      agentEnabled:
-        existingConv?.agentEnabled ?? agent.enabled ?? true,
+      contactName: existingConv?.contactName || messageData?.pushName || null,
+      agentEnabled: existingConv?.agentEnabled ?? agent.enabled ?? true,
       updatedAt: new Date().toISOString(),
     },
     { merge: true }
   );
 
-  // 4) Stop here if outbound, no content, or no clinic
-  if (isFromMe) {
-    return res.status(200).json({ success: true, stored: true, agent: 'skipped-outgoing' });
-  }
-  if (clinicId === 'unknown') {
-    return res.status(200).json({ success: true, stored: true, agent: 'no-clinic' });
-  }
-  if (!content || !content.trim()) {
-    return res.status(200).json({ success: true, stored: true, agent: 'no-text' });
-  }
-
-  // 5) Check agent gates
+  // Decide whether to invoke the agent
   const convAgentEnabled =
-    (existingConv?.agentEnabled as boolean | undefined) ??
-    agent.enabled ??
-    true;
-  if (!convAgentEnabled || !agent.enabled) {
-    return res.status(200).json({ success: true, stored: true, agent: 'paused' });
-  }
+    (existingConv?.agentEnabled as boolean | undefined) ?? agent.enabled ?? true;
 
-  if (!isWithinWorkingHours(agent)) {
-    const env = getEvolutionEnv(res);
-    if (!env) return;
-    const msg = agent.workingHours?.outOfHoursMessage;
-    if (msg) {
+  let agentDecision = 'skipped';
+  if (isFromMe) {
+    agentDecision = 'skipped-outgoing';
+  } else if (clinicId === 'unknown') {
+    agentDecision = 'no-clinic';
+  } else if (!content || !content.trim()) {
+    agentDecision = 'no-text';
+  } else if (!convAgentEnabled || !agent.enabled) {
+    agentDecision = 'paused';
+  } else if (!isWithinWorkingHours(agent)) {
+    agentDecision = 'off-hours';
+    if (agent.workingHours?.outOfHoursMessage) {
       try {
-        await sendText(env, instanceName, jid, msg);
-        await db.collection('whatsapp_messages').add({
-          instanceName,
-          clinicId,
-          remoteJid: jid,
-          fromMe: true,
-          messageType: 'conversation',
-          content: msg,
-          audioBase64: null,
-          messageTimestamp: Math.floor(Date.now() / 1000),
-          createdAt: new Date().toISOString(),
-          source: 'agent',
-        });
+        const env = getEvolutionEnv(res);
+        if (env) {
+          await sendText(env, instanceName, jid, agent.workingHours.outOfHoursMessage);
+          await db.collection('whatsapp_messages').add({
+            instanceName,
+            clinicId,
+            remoteJid: jid,
+            fromMe: true,
+            messageType: 'conversation',
+            content: agent.workingHours.outOfHoursMessage,
+            audioBase64: null,
+            messageTimestamp: Math.floor(Date.now() / 1000),
+            createdAt: new Date().toISOString(),
+            source: 'agent',
+          });
+        }
       } catch (e) {
         console.error('[webhook] off-hours send failed', e);
       }
     }
-    return res.status(200).json({ success: true, agent: 'off-hours' });
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn('[webhook] GEMINI_API_KEY missing — skipping AI reply');
-    return res.status(200).json({ success: true, agent: 'no-key' });
-  }
-
-  // 6) Respond with the agent (fire-and-forget after returning 200)
-  res.status(200).json({ success: true, agent: 'running' });
-
-  try {
-    const env = getEvolutionEnv({
-      status: () => ({ json: () => null }),
-      json: () => null,
-    } as any);
-    if (!env) return;
-
-    const history = await loadRecentHistory(db, instanceName, jid, 20);
-
-    const systemPrompt = buildSystemPrompt({
-      basePrompt,
-      agent,
-      clinicName,
-    });
-
-    let reply = '';
-    try {
-      reply = await generateAgentReply({
-        apiKey: process.env.GEMINI_API_KEY!,
-        systemPrompt,
-        history,
+  } else if (!process.env.GEMINI_API_KEY) {
+    agentDecision = 'no-gemini-key';
+  } else {
+    agentDecision = 'running';
+    // KEY FIX: waitUntil keeps the process alive after we respond.
+    waitUntil(
+      runAgent({
+        clinicId,
+        instanceName,
+        jid,
+        basePrompt,
+        agent,
+        clinicName,
+        professionalId: instance.professionalId ?? null,
+        pushName: messageData?.pushName ?? null,
         userMessage: content,
-        model: agent.model,
-        toolContext: {
-          db,
-          clinicId,
-          professionalId: instance.professionalId ?? null,
-          remoteJid: jid,
-          pushName: messageData?.pushName ?? null,
-        },
-      });
-    } catch (err) {
-      console.error('[agent] generation failed', err);
-      reply = agent.fallbackMessage || '';
-    }
-
-    if (!reply.trim()) {
-      console.warn('[agent] empty reply');
-      return;
-    }
-
-    const delayMs = pickReplyDelayMs(agent, reply);
-    if (agent.showTyping !== false) {
-      await sendPresence(env, instanceName, jid, 'composing', Math.min(delayMs, 25000));
-    }
-    await sleep(delayMs);
-
-    await sendText(env, instanceName, jid, reply);
-
-    await db.collection('whatsapp_messages').add({
-      instanceName,
-      clinicId,
-      remoteJid: jid,
-      fromMe: true,
-      messageType: 'conversation',
-      content: reply,
-      audioBase64: null,
-      messageTimestamp: Math.floor(Date.now() / 1000),
-      createdAt: new Date().toISOString(),
-      source: 'agent',
-    });
-
-    await convRef.set(
-      {
-        lastMessageAt: Math.floor(Date.now() / 1000),
-        lastMessagePreview: reply.slice(0, 120),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
+      })
     );
-  } catch (err) {
-    console.error('[webhook] post-response agent error', err);
   }
+
+  console.log('[webhook] processed', {
+    event,
+    instanceName,
+    jid,
+    fromMe: isFromMe,
+    agentDecision,
+  });
+
+  return res.status(200).json({ success: true, agent: agentDecision });
 }
