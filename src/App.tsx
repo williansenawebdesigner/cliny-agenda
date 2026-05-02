@@ -174,41 +174,41 @@ export default function App() {
           </div>
 
           <nav className="space-y-1 flex-1">
-            <NavItem 
-              icon={<LayoutDashboard size={18} />} 
-              label="Visão Geral" 
-              isActive={currentView === 'dashboard'} 
+            <NavItem
+              icon={<LayoutDashboard size={18} />}
+              label="Visão Geral"
+              isActive={currentView === 'dashboard'}
               onClick={() => setCurrentView('dashboard')}
             />
-            <NavItem 
-              icon={<Calendar size={18} />} 
-              label="Agenda" 
-              isActive={currentView === 'agenda'} 
+            <NavItem
+              icon={<MessageSquare size={18} />}
+              label="Conversas"
+              isActive={currentView === 'chat'}
+              onClick={() => setCurrentView('chat')}
+            />
+            <NavItem
+              icon={<Calendar size={18} />}
+              label="Agenda"
+              isActive={currentView === 'agenda'}
               onClick={() => setCurrentView('agenda')}
             />
-            <NavItem 
-              icon={<Users size={18} />} 
-              label="Pacientes" 
-              isActive={currentView === 'patients'} 
+            <NavItem
+              icon={<Users size={18} />}
+              label="Pacientes"
+              isActive={currentView === 'patients'}
               onClick={() => setCurrentView('patients')}
             />
-            <NavItem 
-              icon={<Building2 size={18} />} 
-              label="Equipe" 
-              isActive={currentView === 'professionals'} 
+            <NavItem
+              icon={<Building2 size={18} />}
+              label="Equipe"
+              isActive={currentView === 'professionals'}
               onClick={() => setCurrentView('professionals')}
             />
-            <NavItem 
-              icon={<Phone size={18} />} 
-              label="WhatsApp IA" 
-              isActive={currentView === 'whatsapp'} 
+            <NavItem
+              icon={<Phone size={18} />}
+              label="WhatsApp IA"
+              isActive={currentView === 'whatsapp'}
               onClick={() => setCurrentView('whatsapp')}
-            />
-            <NavItem 
-              icon={<MessageSquare size={18} />} 
-              label="Conversas" 
-              isActive={currentView === 'chat'} 
-              onClick={() => setCurrentView('chat')}
             />
           </nav>
 
@@ -485,75 +485,132 @@ function PlaceholderBox({ label }: { label: string }) {
   );
 }
 
+type DashboardRange = 'today' | 'week' | 'month' | 'year';
+
+const RANGE_OPTIONS: { id: DashboardRange; label: string }[] = [
+  { id: 'today', label: 'Hoje' },
+  { id: 'week', label: 'Semana' },
+  { id: 'month', label: 'Mês' },
+  { id: 'year', label: 'Ano' },
+];
+
+function rangeBounds(range: DashboardRange): { start: Date; end: Date; label: string } {
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  if (range === 'today') {
+    return { start, end, label: 'no dia de hoje' };
+  }
+  if (range === 'week') {
+    const day = start.getDay(); // 0=Sun
+    const diffToMonday = (day + 6) % 7;
+    start.setDate(start.getDate() - diffToMonday);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end, label: 'nesta semana' };
+  }
+  if (range === 'month') {
+    start.setDate(1);
+    end.setMonth(start.getMonth() + 1, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end, label: 'neste mês' };
+  }
+  // year
+  start.setMonth(0, 1);
+  end.setMonth(11, 31);
+  end.setHours(23, 59, 59, 999);
+  return { start, end, label: 'neste ano' };
+}
+
 function DashboardView() {
   const { clinic } = useContext(ClinicContext);
   const [isSeeding, setIsSeeding] = useState(false);
-  const [stats, setStats] = useState({ today: 0, patients: 0, revenue: 0 });
+  const [range, setRange] = useState<DashboardRange>('month');
+  const [stats, setStats] = useState({ count: 0, patients: 0, revenue: 0, confirmedPct: 0 });
   const [loading, setLoading] = useState(true);
   const [nextAppointments, setNextAppointments] = useState<any[]>([]);
 
   useEffect(() => {
     if (!clinic?.id) return;
-    
-    const fetchDashboardData = async () => {
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
 
-        // Fetch Today's Appointments
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        const { start, end } = rangeBounds(range);
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(todayStart);
+        tomorrow.setDate(todayStart.getDate() + 1);
+
         const appsQ = query(
           collection(db, 'appointments'),
           where('clinicId', '==', clinic.id),
-          where('startTime', '>=', today.toISOString()),
+          where('startTime', '>=', todayStart.toISOString()),
           where('startTime', '<', tomorrow.toISOString()),
           orderBy('startTime', 'asc'),
           limit(3)
         );
         const appsSnap = await getDocs(appsQ);
-        
-        const professionalsSnap = await getDocs(query(collection(db, 'professionals'), where('clinicId', '==', clinic.id)));
-        const professionalsMap: any = {};
-        professionalsSnap.forEach(doc => professionalsMap[doc.id] = { id: doc.id, ...doc.data() });
 
-        // Fetch Enriched Apps
-        const apps = appsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const enrichedApps = await Promise.all(apps.map(async (app: any) => {
-          const patientSnap = await getDocs(query(collection(db, 'patients'), where('clinicId', '==', clinic.id), where('__name__', '==', app.patientId)));
-          const patient = patientSnap.docs[0]?.data() as any;
-          const services = professionalsMap[app.professionalId]?.services || [];
-          const service = services.find((s: any) => s.id === app.serviceId);
-          
-          return {
-            ...app,
-            patientName: patient?.name || '...',
-            procedureName: service?.name || '...'
-          };
-        }));
+        const professionalsSnap = await getDocs(
+          query(collection(db, 'professionals'), where('clinicId', '==', clinic.id))
+        );
+        const professionalsMap: any = {};
+        professionalsSnap.forEach((doc) => (professionalsMap[doc.id] = { id: doc.id, ...doc.data() }));
+
+        const apps = appsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const enrichedApps = await Promise.all(
+          apps.map(async (app: any) => {
+            const patientSnap = await getDocs(
+              query(
+                collection(db, 'patients'),
+                where('clinicId', '==', clinic.id),
+                where('__name__', '==', app.patientId)
+              )
+            );
+            const patient = patientSnap.docs[0]?.data() as any;
+            const services = professionalsMap[app.professionalId]?.services || [];
+            const service = services.find((s: any) => s.id === app.serviceId);
+            return {
+              ...app,
+              patientName: patient?.name || '...',
+              procedureName: service?.name || '...',
+            };
+          })
+        );
         setNextAppointments(enrichedApps);
 
-        // Stats Logic
-        const allTodayAppsQ = query(
+        const rangeAppsQ = query(
           collection(db, 'appointments'),
           where('clinicId', '==', clinic.id),
-          where('startTime', '>=', today.toISOString()),
-          where('startTime', '<', tomorrow.toISOString())
+          where('startTime', '>=', start.toISOString()),
+          where('startTime', '<=', end.toISOString())
         );
-        const allTodayAppsSnap = await getDocs(allTodayAppsQ);
+        const rangeAppsSnap = await getDocs(rangeAppsQ);
         const patientsQ = query(collection(db, 'patients'), where('clinicId', '==', clinic.id));
         const patientsSnap = await getDocs(patientsQ);
 
         let rev = 0;
-        allTodayAppsSnap.forEach(doc => {
-          const data = doc.data();
-          if (data.status !== 'cancelled') rev += (data.price || 0);
+        let total = 0;
+        let confirmedOrDone = 0;
+        rangeAppsSnap.forEach((doc) => {
+          const data = doc.data() as any;
+          total++;
+          if (data.status !== 'cancelled') rev += data.price || 0;
+          if (data.status === 'confirmed' || data.status === 'completed' || data.status === 'checked-in') {
+            confirmedOrDone++;
+          }
         });
 
         setStats({
-          today: allTodayAppsSnap.size,
+          count: rangeAppsSnap.size,
           patients: patientsSnap.size,
-          revenue: rev
+          revenue: rev,
+          confirmedPct: total > 0 ? Math.round((confirmedOrDone / total) * 100) : 0,
         });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -563,7 +620,7 @@ function DashboardView() {
     };
 
     fetchDashboardData();
-  }, [clinic?.id]);
+  }, [clinic?.id, range]);
 
   const handleSeed = async () => {
     if (!clinic?.id) return;
@@ -573,14 +630,16 @@ function DashboardView() {
     window.location.reload();
   };
   
+  const rangeMeta = rangeBounds(range);
+
   return (
     <div className="space-y-12 pb-10">
       <header className="flex flex-col md:flex-row md:items-start justify-between gap-6 relative">
         <div className="flex flex-col gap-2">
           <h1 className="text-4xl font-bold tracking-tight text-slate-900">Olá, {clinic?.name}</h1>
-          <p className="text-slate-400 font-medium text-lg">Resumo da sua clínica hoje.</p>
+          <p className="text-slate-400 font-medium text-lg">Resumo da sua clínica {rangeMeta.label}.</p>
         </div>
-        <button 
+        <button
           onClick={handleSeed}
           disabled={isSeeding}
           className="md:absolute md:top-0 md:right-0 text-[10px] font-bold px-4 py-1.5 bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-all whitespace-nowrap"
@@ -589,11 +648,32 @@ function DashboardView() {
         </button>
       </header>
 
+      <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl w-fit">
+        {RANGE_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setRange(opt.id)}
+            className={cn(
+              'px-4 py-2 rounded-lg text-xs font-bold transition-all',
+              range === opt.id ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-900'
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
-        <StatCard label="Consultas Hoje" value={loading ? "..." : stats.today.toString()} />
-        <StatCard label="Total Pacientes" value={loading ? "..." : stats.patients.toString()} />
-        <StatCard label="Faturamento Hoje" value={loading ? "..." : `R$ ${stats.revenue}`} />
-        <StatCard label="Confirmados" value="100%" />
+        <StatCard
+          label={range === 'today' ? 'Consultas Hoje' : range === 'week' ? 'Consultas / Semana' : range === 'month' ? 'Consultas / Mês' : 'Consultas / Ano'}
+          value={loading ? '...' : stats.count.toString()}
+        />
+        <StatCard label="Total Pacientes" value={loading ? '...' : stats.patients.toString()} />
+        <StatCard
+          label={range === 'today' ? 'Faturamento Hoje' : range === 'week' ? 'Faturamento Semana' : range === 'month' ? 'Faturamento Mês' : 'Faturamento Ano'}
+          value={loading ? '...' : `R$ ${stats.revenue.toLocaleString('pt-BR')}`}
+        />
+        <StatCard label="Confirmados" value={loading ? '...' : `${stats.confirmedPct}%`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 pt-4">
