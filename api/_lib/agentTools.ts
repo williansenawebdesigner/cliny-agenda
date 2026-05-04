@@ -129,9 +129,16 @@ async function listServices(ctx: ToolContext): Promise<ToolResult> {
       name: s.name,
       durationMin: s.duration,
       price: s.price,
+      bookingMode: p.bookingMode === 'walk_in' ? 'walk_in' : 'slot',
     }))
   );
-  return { ok: true, data: { services } };
+  return {
+    ok: true,
+    data: {
+      services,
+      note: 'Serviços com bookingMode="walk_in" são por ordem de chegada (sem hora marcada). Para esses, NÃO chame list_available_slots nem create_appointment — chame list_available_periods e create_walk_in_appointment.',
+    },
+  };
 }
 
 async function listAvailableSlots(
@@ -326,6 +333,200 @@ async function listPatientAppointments(
   return { ok: true, data: { patientId: patient.id, patientName: (patient.data() as any).name, timezone: ctx.timezone, appointments } };
 }
 
+async function listAvailablePeriods(
+  ctx: ToolContext,
+  args: { date: string; professionalId?: string }
+): Promise<ToolResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.date)) {
+    return { ok: false, error: `Invalid date: ${args.date} (use YYYY-MM-DD)` };
+  }
+
+  const prof = await findProfessional(ctx, args.professionalId);
+  if (!prof) return { ok: false, error: 'No professional found' };
+  if (prof.bookingMode !== 'walk_in') {
+    return {
+      ok: false,
+      error: `Professional ${prof.name} works with scheduled slots, not walk-in. Use list_available_slots instead.`,
+    };
+  }
+
+  const dayIndex = dayOfWeekInTz(startOfDayInTz(args.date, ctx.timezone), ctx.timezone);
+  const dayKey = DAY_KEYS[dayIndex];
+  const periods: any[] = (prof.walkInPeriods ?? {})[dayKey] ?? [];
+
+  if (periods.length === 0) {
+    return {
+      ok: true,
+      data: {
+        date: args.date,
+        professionalId: prof.id,
+        professionalName: prof.name,
+        bookingMode: 'walk_in',
+        periods: [],
+        reason: `Professional has no walk-in periods configured for ${dayKey}.`,
+      },
+    };
+  }
+
+  const dayStart = startOfDayInTz(args.date, ctx.timezone);
+  const dayEnd = endOfDayInTz(args.date, ctx.timezone);
+
+  const apptSnap = await ctx.db
+    .collection('appointments')
+    .where('clinicId', '==', ctx.clinicId)
+    .where('professionalId', '==', prof.id)
+    .where('startTime', '>=', dayStart.toISOString())
+    .where('startTime', '<=', dayEnd.toISOString())
+    .get();
+
+  const usedByPeriod: Record<string, number> = {};
+  apptSnap.docs.forEach((d) => {
+    const data = d.data() as any;
+    if (data.status === 'cancelled') return;
+    if (data.walkIn && data.periodId) {
+      usedByPeriod[data.periodId] = (usedByPeriod[data.periodId] ?? 0) + 1;
+    }
+  });
+
+  const enriched = periods.map((p) => {
+    const used = usedByPeriod[p.id] ?? 0;
+    const remaining = Math.max(0, (p.capacity ?? 0) - used);
+    return {
+      periodId: p.id,
+      label: p.label,
+      start: p.start,
+      end: p.end,
+      capacity: p.capacity,
+      used,
+      remaining,
+      available: remaining > 0,
+    };
+  });
+
+  return {
+    ok: true,
+    data: {
+      date: args.date,
+      professionalId: prof.id,
+      professionalName: prof.name,
+      bookingMode: 'walk_in',
+      timezone: ctx.timezone,
+      periods: enriched,
+    },
+  };
+}
+
+async function createWalkInAppointment(
+  ctx: ToolContext,
+  args: {
+    patientName: string;
+    patientPhone?: string;
+    professionalId?: string;
+    serviceId: string;
+    date: string;
+    periodId: string;
+    notes?: string;
+  }
+): Promise<ToolResult> {
+  const prof = await findProfessional(ctx, args.professionalId);
+  if (!prof) return { ok: false, error: 'No professional found' };
+  if (prof.bookingMode !== 'walk_in') {
+    return {
+      ok: false,
+      error: `Professional ${prof.name} uses scheduled slots, not walk-in. Use create_appointment with a specific time instead.`,
+    };
+  }
+
+  const service = (prof.services ?? []).find((s: any) => s.id === args.serviceId);
+  if (!service) {
+    return {
+      ok: false,
+      error: `Service ${args.serviceId} not found for ${prof.name}. Call list_services first.`,
+    };
+  }
+
+  const dayIndex = dayOfWeekInTz(startOfDayInTz(args.date, ctx.timezone), ctx.timezone);
+  const dayKey = DAY_KEYS[dayIndex];
+  const periods = (prof.walkInPeriods ?? {})[dayKey] ?? [];
+  const period = periods.find((p: any) => p.id === args.periodId);
+  if (!period) {
+    return {
+      ok: false,
+      error: `Period ${args.periodId} not configured for ${dayKey}. Call list_available_periods first.`,
+    };
+  }
+
+  const startTime = fromZonedTime(args.date, period.start, ctx.timezone);
+  if (startTime.getTime() < Date.now() - 60 * 1000) {
+    return { ok: false, error: 'Cannot schedule in the past.' };
+  }
+  const endTime = fromZonedTime(args.date, period.end, ctx.timezone);
+
+  // Capacity check
+  const dayStart = startOfDayInTz(args.date, ctx.timezone);
+  const dayEnd = endOfDayInTz(args.date, ctx.timezone);
+  const apptSnap = await ctx.db
+    .collection('appointments')
+    .where('clinicId', '==', ctx.clinicId)
+    .where('professionalId', '==', prof.id)
+    .where('startTime', '>=', dayStart.toISOString())
+    .where('startTime', '<=', dayEnd.toISOString())
+    .get();
+  const used = apptSnap.docs.filter((d) => {
+    const x = d.data() as any;
+    return x.status !== 'cancelled' && x.walkIn && x.periodId === period.id;
+  }).length;
+  if (used >= (period.capacity ?? 0)) {
+    return {
+      ok: false,
+      error: `Period "${period.label}" is full on ${args.date} (${used}/${period.capacity}). Suggest another period or date.`,
+    };
+  }
+
+  const phone = args.patientPhone || jidToPhone(ctx.remoteJid);
+  const { id: patientId, created } = await findOrCreatePatient(
+    ctx,
+    args.patientName,
+    phone
+  );
+
+  const ref = await ctx.db.collection('appointments').add({
+    clinicId: ctx.clinicId,
+    professionalId: prof.id,
+    patientId,
+    serviceId: args.serviceId,
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
+    status: 'scheduled',
+    price: service.price ?? 0,
+    notes: args.notes ?? '',
+    walkIn: true,
+    periodId: period.id,
+    periodLabel: period.label,
+    createdBy: 'agent',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return {
+    ok: true,
+    data: {
+      appointmentId: ref.id,
+      patientId,
+      patientCreated: created,
+      professionalName: prof.name,
+      serviceName: service.name,
+      bookingMode: 'walk_in',
+      periodLabel: period.label,
+      periodStart: period.start,
+      periodEnd: period.end,
+      date: args.date,
+      timezone: ctx.timezone,
+      reminderToPatient: `Atendimento por ordem de chegada. Compareça à clínica a partir das ${period.start} no dia ${args.date}.`,
+    },
+  };
+}
+
 async function transferToHuman(
   ctx: ToolContext,
   args: { reason?: string }
@@ -464,6 +665,37 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
   },
   {
+    name: 'list_available_periods',
+    description:
+      'Para profissionais que atendem por ORDEM DE CHEGADA (bookingMode="walk_in"). Lista os períodos do dia (ex: Manhã, Tarde) com vagas restantes para uma data.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        date: { type: Type.STRING, description: 'Data YYYY-MM-DD' },
+        professionalId: { type: Type.STRING, description: 'Opcional. Usa o profissional vinculado se omitido.' },
+      },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'create_walk_in_appointment',
+    description:
+      'Para profissionais walk-in. Cria um agendamento por ordem de chegada em um período (Manhã/Tarde/...). Confirme com o paciente que será por ordem de chegada antes de chamar.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        patientName: { type: Type.STRING, description: 'Nome completo do paciente' },
+        patientPhone: { type: Type.STRING, description: 'Telefone, dígitos. Se omitido, usa o do WhatsApp.' },
+        professionalId: { type: Type.STRING, description: 'ID do profissional' },
+        serviceId: { type: Type.STRING, description: 'ID do serviço' },
+        date: { type: Type.STRING, description: 'YYYY-MM-DD' },
+        periodId: { type: Type.STRING, description: 'ID do período retornado por list_available_periods' },
+        notes: { type: Type.STRING, description: 'Observações livres' },
+      },
+      required: ['patientName', 'serviceId', 'date', 'periodId'],
+    },
+  },
+  {
     name: 'transfer_to_human',
     description:
       'Transfere a conversa para um(a) atendente humano(a). Use quando o paciente pedir explicitamente, quando detectar reclamação séria, urgência médica, ou quando você não conseguir resolver após 2-3 tentativas. Após chamar esta função, a IA é pausada automaticamente nesta conversa e um humano assume.',
@@ -496,6 +728,10 @@ export async function executeTool(
         return await listPatientAppointments(ctx, args);
       case 'cancel_appointment':
         return await cancelAppointment(ctx, args);
+      case 'list_available_periods':
+        return await listAvailablePeriods(ctx, args);
+      case 'create_walk_in_appointment':
+        return await createWalkInAppointment(ctx, args);
       case 'transfer_to_human':
         return await transferToHuman(ctx, args);
       default:

@@ -37,6 +37,16 @@ export interface ProfessionalService {
   price: number;
 }
 
+export type BookingMode = 'slot' | 'walk_in';
+
+export interface WalkInPeriod {
+  id: string;
+  label: string;
+  start: string; // "08:00"
+  end: string; // "12:00"
+  capacity: number;
+}
+
 export interface Professional {
   id: string;
   clinicId: string;
@@ -46,7 +56,25 @@ export interface Professional {
   weeklyLinkToken?: string;
   schedule?: Record<string, string[]>;
   services?: ProfessionalService[];
+  bookingMode?: BookingMode; // default 'slot'
+  walkInPeriods?: Record<string, WalkInPeriod[]>;
 }
+
+export const DEFAULT_WALKIN_PERIODS: WalkInPeriod[] = [
+  { id: 'morning', label: 'Manhã', start: '08:00', end: '12:00', capacity: 10 },
+  { id: 'afternoon', label: 'Tarde', start: '13:00', end: '18:00', capacity: 10 },
+];
+
+export const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+export const WEEKDAY_LABELS_PT: Record<string, string> = {
+  sunday: 'Domingo',
+  monday: 'Segunda',
+  tuesday: 'Terça',
+  wednesday: 'Quarta',
+  thursday: 'Quinta',
+  friday: 'Sexta',
+  saturday: 'Sábado',
+};
 
 export type AgentLanguage = 'pt-BR' | 'en' | 'es';
 export type AgentFormality = 'tu' | 'voce' | 'senhor';
@@ -64,6 +92,8 @@ export interface AgentTools {
   list_services?: boolean;
   list_available_slots?: boolean;
   create_appointment?: boolean;
+  list_available_periods?: boolean;
+  create_walk_in_appointment?: boolean;
   list_patient_appointments?: boolean;
   cancel_appointment?: boolean;
   transfer_to_human?: boolean;
@@ -161,6 +191,9 @@ export interface Appointment {
   status: AppointmentStatus;
   price: number;
   notes?: string;
+  walkIn?: boolean;
+  periodId?: string;
+  periodLabel?: string;
 }
 
 export enum OperationType {
@@ -206,6 +239,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
     list_services: true,
     list_available_slots: true,
     create_appointment: true,
+    list_available_periods: true,
+    create_walk_in_appointment: true,
     list_patient_appointments: true,
     cancel_appointment: true,
     transfer_to_human: true,

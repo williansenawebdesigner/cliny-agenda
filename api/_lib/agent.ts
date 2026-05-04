@@ -19,6 +19,8 @@ export interface AgentToolsToggle {
   list_services?: boolean;
   list_available_slots?: boolean;
   create_appointment?: boolean;
+  list_available_periods?: boolean;
+  create_walk_in_appointment?: boolean;
   list_patient_appointments?: boolean;
   cancel_appointment?: boolean;
   transfer_to_human?: boolean;
@@ -94,6 +96,8 @@ export const DEFAULT_AGENT: AgentConfig = {
     list_services: true,
     list_available_slots: true,
     create_appointment: true,
+    list_available_periods: true,
+    create_walk_in_appointment: true,
     list_patient_appointments: true,
     cancel_appointment: true,
     transfer_to_human: true,
@@ -182,16 +186,30 @@ export function buildSystemPrompt(opts: {
     '## Capacidades',
     'Você TEM acesso a ferramentas (function calling). Use-as quando aplicável.',
     '',
-    '## Fluxo recomendado para agendamento',
-    '1. Pergunte (se ainda não souber) o nome do paciente, qual procedimento e a data desejada.',
-    '2. Chame list_services para descobrir o serviceId e a duração.',
-    '3. Chame list_available_slots para a data desejada.',
-    '4. Ofereça 2-3 horários ao paciente.',
-    '5. Após confirmação explícita ("pode marcar para X"), chame create_appointment.',
-    '6. Ao confirmar o agendamento criado, repita os detalhes (data, hora, profissional, serviço).',
+    '## Modos de agendamento',
+    'Cada serviço retornado por list_services tem um campo bookingMode:',
+    '- "slot": atendimento por HORA MARCADA. Use list_available_slots e create_appointment.',
+    '- "walk_in": atendimento por ORDEM DE CHEGADA, em períodos do dia (Manhã/Tarde/etc). Use list_available_periods e create_walk_in_appointment. NÃO pergunte hora exata.',
+    'Sempre que for agendar, primeiro chame list_services para descobrir o bookingMode do serviço escolhido.',
     '',
-    'NUNCA invente serviços, preços, horários ou profissionais. Use sempre as ferramentas.',
-    'NUNCA chame create_appointment sem antes confirmar tudo com o paciente.',
+    '## Fluxo HORA MARCADA (slot)',
+    '1. Pergunte nome, procedimento e data.',
+    '2. list_services → pega serviceId, duração e bookingMode.',
+    '3. list_available_slots → ofereça 2-3 horários.',
+    '4. Após confirmação ("pode marcar para X"), chame create_appointment.',
+    '5. Confirme repetindo data, hora, profissional e serviço.',
+    '',
+    '## Fluxo ORDEM DE CHEGADA (walk_in)',
+    '1. Pergunte nome, procedimento e data.',
+    '2. list_services → confirma bookingMode="walk_in".',
+    '3. list_available_periods → mostra os períodos do dia (ex: "Manhã 08:00-12:00", "Tarde 13:00-18:00") com vagas restantes.',
+    '4. Pergunte ao paciente: "Você prefere de manhã ou à tarde?" (use os labels reais retornados).',
+    '5. Após escolha, chame create_walk_in_appointment com o periodId.',
+    '6. Reforce: "É por ordem de chegada. Compareça à clínica a partir das HH:MM (hora de início do período)." Use o campo reminderToPatient retornado.',
+    '',
+    'NUNCA invente serviços, preços, horários, períodos ou profissionais. Use sempre as ferramentas.',
+    'NUNCA chame create_appointment ou create_walk_in_appointment sem antes confirmar tudo com o paciente.',
+    'NUNCA misture os fluxos: se bookingMode é walk_in, não fale em hora específica.',
     '',
     '## Instruções específicas da clínica',
     opts.basePrompt?.trim() || '(sem instruções específicas)'

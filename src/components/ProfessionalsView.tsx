@@ -1,16 +1,26 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { 
-  Plus, 
-  Trash2, 
+import {
+  Plus,
+  Trash2,
   X,
   User,
-  Edit2
+  Edit2,
+  Clock,
+  Users as UsersIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from '../lib/firebase';
 import { cn } from '../lib/utils';
-import { Professional, ProfessionalService } from '../types';
+import {
+  Professional,
+  ProfessionalService,
+  BookingMode,
+  WalkInPeriod,
+  DEFAULT_WALKIN_PERIODS,
+  WEEKDAY_KEYS,
+  WEEKDAY_LABELS_PT,
+} from '../types';
 
 interface ProfessionalViewProps {
   clinicId: string;
@@ -154,6 +164,11 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
   const [email, setEmail] = useState(existing?.email || '');
   const [specialty, setSpecialty] = useState(existing?.specialty || '');
   const [services, setServices] = useState<ProfessionalService[]>(existing?.services || []);
+  const [bookingMode, setBookingMode] = useState<BookingMode>(existing?.bookingMode === 'walk_in' ? 'walk_in' : 'slot');
+  const [walkInPeriods, setWalkInPeriods] = useState<Record<string, WalkInPeriod[]>>(
+    existing?.walkInPeriods ?? {}
+  );
+  const [tab, setTab] = useState<'identity' | 'booking'>('identity');
   const [submitting, setSubmitting] = useState(false);
 
   const addService = () => {
@@ -168,25 +183,77 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
     setServices(services.filter(s => s.id !== id));
   };
 
+  const fillDayWithDefaults = (dayKey: string) => {
+    setWalkInPeriods((cur) => ({
+      ...cur,
+      [dayKey]: DEFAULT_WALKIN_PERIODS.map((p) => ({ ...p, id: `${dayKey}-${p.id}-${crypto.randomUUID().slice(0,4)}` })),
+    }));
+  };
+
+  const copyToAllWeekdays = (dayKey: string) => {
+    const src = walkInPeriods[dayKey];
+    if (!src) return;
+    const next: Record<string, WalkInPeriod[]> = { ...walkInPeriods };
+    for (const k of WEEKDAY_KEYS) {
+      if (k === dayKey) continue;
+      next[k] = src.map((p) => ({ ...p, id: `${k}-${p.label.toLowerCase()}-${crypto.randomUUID().slice(0,4)}` }));
+    }
+    setWalkInPeriods(next);
+  };
+
+  const clearDay = (dayKey: string) => {
+    setWalkInPeriods((cur) => {
+      const next = { ...cur };
+      delete next[dayKey];
+      return next;
+    });
+  };
+
+  const updatePeriod = (dayKey: string, periodId: string, patch: Partial<WalkInPeriod>) => {
+    setWalkInPeriods((cur) => ({
+      ...cur,
+      [dayKey]: (cur[dayKey] ?? []).map((p) => (p.id === periodId ? { ...p, ...patch } : p)),
+    }));
+  };
+
+  const removePeriod = (dayKey: string, periodId: string) => {
+    setWalkInPeriods((cur) => ({
+      ...cur,
+      [dayKey]: (cur[dayKey] ?? []).filter((p) => p.id !== periodId),
+    }));
+  };
+
+  const addPeriod = (dayKey: string) => {
+    setWalkInPeriods((cur) => ({
+      ...cur,
+      [dayKey]: [
+        ...(cur[dayKey] ?? []),
+        { id: crypto.randomUUID(), label: 'Período', start: '08:00', end: '12:00', capacity: 10 },
+      ],
+    }));
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = {
+      const data: any = {
         clinicId,
         name,
         email,
         specialty,
         services,
-        updatedAt: new Date().toISOString()
+        bookingMode,
+        walkInPeriods: bookingMode === 'walk_in' ? walkInPeriods : null,
+        updatedAt: new Date().toISOString(),
       };
-      
+
       if (existing) {
         await updateDoc(doc(db, 'professionals', existing.id), data);
       } else {
         await addDoc(collection(db, 'professionals'), {
           ...data,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
         });
       }
       onSuccess();
@@ -212,17 +279,42 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
         className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl flex flex-col"
       >
-        <div className="p-8 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white z-10 shrink-0">
-          <div className="flex flex-col gap-1">
-             <h3 className="text-xl font-semibold tracking-tight text-slate-900">{existing ? 'Editar Profissional' : 'Novo Profissional'}</h3>
-             <p className="text-[10px] text-slate-400 font-medium">Cadastre os dados e serviços atendidos.</p>
+        <div className="p-8 border-b border-slate-50 sticky top-0 bg-white z-10 shrink-0">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-xl font-semibold tracking-tight text-slate-900">{existing ? 'Editar Profissional' : 'Novo Profissional'}</h3>
+              <p className="text-[10px] text-slate-400 font-medium">Cadastre os dados, serviços e modo de atendimento.</p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
+              <X size={20} className="text-slate-300" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
-            <X size={20} className="text-slate-300" />
-          </button>
+          <div className="flex gap-1 bg-slate-50 p-1 rounded-xl">
+            {(
+              [
+                ['identity', 'Identidade & Serviços', <User size={14} key="i" />],
+                ['booking', 'Modo de Atendimento', <Clock size={14} key="b" />],
+              ] as const
+            ).map(([key, label, icon]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
+                  tab === key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                )}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8 flex-1">
+        {tab === 'identity' && (
+        <div className="space-y-8">
           <div className="grid grid-cols-2 gap-6">
              <div className="space-y-2 col-span-2">
                <label className="text-[10px] font-semibold text-slate-400 ml-1">Nome Completo</label>
@@ -307,7 +399,154 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
              </div>
           </div>
 
-          <button 
+        </div>
+        )}
+
+        {tab === 'booking' && (
+          <div className="space-y-8">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-3">Como este profissional atende?</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBookingMode('slot')}
+                  className={cn(
+                    'p-5 rounded-xl border-2 transition-all text-left',
+                    bookingMode === 'slot' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-slate-200'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', bookingMode === 'slot' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>
+                      <Clock size={20} />
+                    </div>
+                    <h4 className="font-bold text-slate-900">Hora marcada</h4>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Cada paciente tem um horário específico (ex: 14h00, 14h30). A IA pergunta hora exata.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBookingMode('walk_in')}
+                  className={cn(
+                    'p-5 rounded-xl border-2 transition-all text-left',
+                    bookingMode === 'walk_in' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-slate-200'
+                  )}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', bookingMode === 'walk_in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>
+                      <UsersIcon size={20} />
+                    </div>
+                    <h4 className="font-bold text-slate-900">Ordem de chegada</h4>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Pacientes escolhem o período (Manhã/Tarde). A IA pergunta só o turno e reforça que é por ordem de chegada.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {bookingMode === 'walk_in' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Períodos por dia</p>
+                  <p className="text-[10px] text-slate-400">Capacidade = vagas/dia</p>
+                </div>
+                {WEEKDAY_KEYS.map((dayKey) => {
+                  const periods = walkInPeriods[dayKey] ?? [];
+                  return (
+                    <div key={dayKey} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-sm text-slate-900">{WEEKDAY_LABELS_PT[dayKey]}</h4>
+                        <div className="flex items-center gap-2">
+                          {periods.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => fillDayWithDefaults(dayKey)}
+                              className="text-[10px] font-bold text-emerald-600 hover:underline"
+                            >
+                              + Manhã/Tarde padrão
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => addPeriod(dayKey)}
+                                className="text-[10px] font-bold text-emerald-600 hover:underline"
+                              >
+                                + Período
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyToAllWeekdays(dayKey)}
+                                className="text-[10px] font-bold text-slate-500 hover:underline"
+                              >
+                                Copiar p/ todos
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => clearDay(dayKey)}
+                                className="text-[10px] font-bold text-rose-500 hover:underline"
+                              >
+                                Limpar
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {periods.length === 0 ? (
+                        <p className="text-xs text-slate-300 italic">Não atende neste dia.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {periods.map((p) => (
+                            <div key={p.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100">
+                              <input
+                                value={p.label}
+                                onChange={(e) => updatePeriod(dayKey, p.id, { label: e.target.value })}
+                                placeholder="Manhã"
+                                className="flex-1 min-w-0 px-2 py-1.5 bg-transparent outline-none font-semibold text-sm text-slate-900"
+                              />
+                              <input
+                                type="time"
+                                value={p.start}
+                                onChange={(e) => updatePeriod(dayKey, p.id, { start: e.target.value })}
+                                className="w-24 px-2 py-1.5 bg-slate-50 rounded-md outline-none text-xs font-semibold text-slate-700"
+                              />
+                              <span className="text-slate-300 text-xs">→</span>
+                              <input
+                                type="time"
+                                value={p.end}
+                                onChange={(e) => updatePeriod(dayKey, p.id, { end: e.target.value })}
+                                className="w-24 px-2 py-1.5 bg-slate-50 rounded-md outline-none text-xs font-semibold text-slate-700"
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                value={p.capacity}
+                                onChange={(e) => updatePeriod(dayKey, p.id, { capacity: Number(e.target.value) })}
+                                title="Capacidade"
+                                className="w-16 px-2 py-1.5 bg-slate-50 rounded-md outline-none text-xs font-semibold text-slate-700"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removePeriod(dayKey, p.id)}
+                                className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+          <button
             disabled={submitting}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-300 text-white font-semibold py-4 rounded-lg shadow-sm transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
           >

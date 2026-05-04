@@ -1201,6 +1201,11 @@ function FocusItemRow({
           <div className={cn('text-2xl font-bold tracking-tight leading-none', isCancelled ? 'text-slate-400 line-through' : 'text-slate-900')}>
             {format(start, 'HH:mm')}
           </div>
+          {appointment.walkIn && (
+            <div className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mt-1">
+              {appointment.periodLabel || 'Walk-in'}
+            </div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <p
@@ -1212,6 +1217,12 @@ function FocusItemRow({
             {patient?.name || 'Paciente'}
           </p>
           <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+            {appointment.walkIn && (
+              <span className="text-emerald-600 font-bold">
+                Ordem de chegada · {appointment.periodLabel || 'período'}
+                {' · '}
+              </span>
+            )}
             {service?.name || 'Atendimento'}
             {professional?.name ? ` · ${professional.name}` : ''}
             {patient?.phone ? ` · ${patient.phone}` : ''}
