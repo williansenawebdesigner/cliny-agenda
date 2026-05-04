@@ -847,9 +847,12 @@ function InstanceModal({
               </p>
               {(
                 [
+                  ['resolve_date', 'Interpretar datas em texto livre', 'Resolve "terça", "amanhã", "10/06" no fuso da clínica. Recomendado deixar ativo.'],
                   ['list_services', 'Listar serviços e preços', 'Recomendado deixar ativo.'],
-                  ['list_available_slots', 'Listar horários disponíveis', 'Necessário para sugerir horários.'],
-                  ['create_appointment', 'Criar agendamento', 'Desligue se quiser que a IA apenas sugira (humano confirma).'],
+                  ['list_available_slots', 'Listar horários disponíveis (hora marcada)', 'Necessário para sugerir horários.'],
+                  ['create_appointment', 'Criar agendamento (hora marcada)', 'Desligue se quiser que a IA apenas sugira (humano confirma).'],
+                  ['list_available_periods', 'Listar períodos (ordem de chegada)', 'Para profissionais walk-in.'],
+                  ['create_walk_in_appointment', 'Criar agendamento por ordem de chegada', 'Para profissionais walk-in.'],
                   ['list_patient_appointments', 'Ver agendamentos do paciente', ''],
                   ['cancel_appointment', 'Cancelar agendamento', ''],
                   ['transfer_to_human', 'Transferir para humano', 'Pausa a IA na conversa.'],

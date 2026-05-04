@@ -89,6 +89,7 @@ export interface AgentTriggers {
 }
 
 export interface AgentTools {
+  resolve_date?: boolean;
   list_services?: boolean;
   list_available_slots?: boolean;
   create_appointment?: boolean;
@@ -236,6 +237,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   },
 
   tools: {
+    resolve_date: true,
     list_services: true,
     list_available_slots: true,
     create_appointment: true,

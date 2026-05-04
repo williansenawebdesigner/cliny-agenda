@@ -16,6 +16,7 @@ export interface AgentTriggers {
 }
 
 export interface AgentToolsToggle {
+  resolve_date?: boolean;
   list_services?: boolean;
   list_available_slots?: boolean;
   create_appointment?: boolean;
@@ -93,6 +94,7 @@ export const DEFAULT_AGENT: AgentConfig = {
   },
 
   tools: {
+    resolve_date: true,
     list_services: true,
     list_available_slots: true,
     create_appointment: true,
@@ -138,9 +140,25 @@ const EMOJI_INSTRUCTIONS: Record<AgentEmojiUse, string> = {
   free: 'Pode usar emojis livremente para tornar a conversa mais leve e amigável.',
 };
 
+const WEEKDAY_PT = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
 function todayContext(tz: string): string {
   const now = new Date();
-  return `Hoje é ${humanInTz(now, tz)} (data ISO: ${ymdInTz(now, tz)}). Hora atual: ${hmInTz(now, tz)}. Fuso horário da clínica: ${tz}.`;
+  const todayYmd = ymdInTz(now, tz);
+  const lines: string[] = [
+    `Hoje é ${humanInTz(now, tz)} (data ISO: ${todayYmd}). Hora atual: ${hmInTz(now, tz)}. Fuso horário da clínica: ${tz}.`,
+    '',
+    'Mapa dos próximos 7 dias (use estas datas literais quando o paciente mencionar dia da semana):',
+  ];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+    const ymd = ymdInTz(d, tz);
+    const dow = dayOfWeekInTz(new Date(`${ymd}T12:00:00Z`), tz);
+    const labels =
+      i === 0 ? ' (hoje)' : i === 1 ? ' (amanhã)' : i === 2 ? ' (depois de amanhã)' : '';
+    lines.push(`- ${WEEKDAY_PT[dow]}${labels}: ${ymd}`);
+  }
+  return lines.join('\n');
 }
 
 export function buildSystemPrompt(opts: {
@@ -185,6 +203,11 @@ export function buildSystemPrompt(opts: {
     '',
     '## Capacidades',
     'Você TEM acesso a ferramentas (function calling). Use-as quando aplicável.',
+    '',
+    '## Regra crítica de datas',
+    'Quando o paciente mencionar uma data ("terça", "amanhã", "10/06", "próxima sexta", "semana que vem"), você DEVE chamar resolve_date(expression="<texto exato do paciente>") ANTES de chamar list_available_slots, list_available_periods, create_appointment ou create_walk_in_appointment.',
+    'NUNCA tente calcular a data sozinho. NUNCA use uma data sem confirmar com o paciente o dia da semana.',
+    'Se o paciente disser apenas o dia da semana (ex: "terça"), assuma a próxima ocorrência (incluindo hoje se ainda for cedo o suficiente). Após resolve_date, confirme com o paciente: "Ok, então quinta-feira, 10/06?".',
     '',
     '## Modos de agendamento',
     'Cada serviço retornado por list_services tem um campo bookingMode:',

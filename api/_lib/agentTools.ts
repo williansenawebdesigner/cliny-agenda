@@ -8,6 +8,7 @@ import {
   hmInTz,
   humanInTz,
   startOfDayInTz,
+  ymdInTz,
 } from './tz.js';
 
 export interface ToolContext {
@@ -527,6 +528,196 @@ async function createWalkInAppointment(
   };
 }
 
+/* ----------------------------------------------------------------------- */
+/*  Date resolver (PT-BR temporal expressions)                              */
+/* ----------------------------------------------------------------------- */
+
+const DAY_NAMES_PT: Record<string, number> = {
+  domingo: 0,
+  segunda: 1,
+  'segunda-feira': 1,
+  terca: 2,
+  'terça': 2,
+  'terca-feira': 2,
+  'terça-feira': 2,
+  quarta: 3,
+  'quarta-feira': 3,
+  quinta: 4,
+  'quinta-feira': 4,
+  sexta: 5,
+  'sexta-feira': 5,
+  sabado: 6,
+  'sábado': 6,
+};
+
+const MONTH_NAMES_PT: Record<string, number> = {
+  janeiro: 0, fevereiro: 1, marco: 2, 'março': 2,
+  abril: 3, maio: 4, junho: 5, julho: 6, agosto: 7,
+  setembro: 8, outubro: 9, novembro: 10, dezembro: 11,
+};
+
+function stripAccentsLower(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function tzNowParts(tz: string): { year: number; month: number; day: number; weekday: number } {
+  const now = new Date();
+  const ymd = ymdInTz(now, tz);
+  const [y, m, d] = ymd.split('-').map(Number);
+  const weekday = dayOfWeekInTz(startOfDayInTz(ymd, tz), tz);
+  return { year: y, month: m, day: d, weekday };
+}
+
+function fmtYmd(year: number, month0: number, day: number): string {
+  const m = (month0 + 1).toString().padStart(2, '0');
+  const d = day.toString().padStart(2, '0');
+  return `${year}-${m}-${d}`;
+}
+
+function addDaysYmd(ymd: string, days: number, tz: string): string {
+  const base = startOfDayInTz(ymd, tz);
+  const next = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+  return ymdInTz(next, tz);
+}
+
+/**
+ * Resolves a free-text PT-BR date expression to YYYY-MM-DD using the clinic timezone.
+ * Returns { ymd, weekdayName, interpreted } or { error }.
+ */
+function resolveDateExpression(expr: string, tz: string): {
+  ymd?: string;
+  weekday?: number;
+  weekdayName?: string;
+  interpreted?: string;
+  error?: string;
+} {
+  const raw = expr?.trim();
+  if (!raw) return { error: 'Empty expression' };
+  const text = stripAccentsLower(raw);
+
+  const today = tzNowParts(tz);
+  const todayYmd = fmtYmd(today.year, today.month - 1, today.day);
+
+  // 1) Direct ISO YYYY-MM-DD
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return { ymd: text, interpreted: 'ISO date' };
+  }
+
+  // 2) DD/MM or DD/MM/YYYY
+  const brMatch = text.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+  if (brMatch) {
+    const day = Number(brMatch[1]);
+    const month0 = Number(brMatch[2]) - 1;
+    let year = brMatch[3] ? Number(brMatch[3]) : today.year;
+    if (year < 100) year += 2000;
+    const candidate = fmtYmd(year, month0, day);
+    // If user gave only DD/MM and that date is in the past, roll to next year
+    if (!brMatch[3]) {
+      const cand = startOfDayInTz(candidate, tz).getTime();
+      const nowMs = startOfDayInTz(todayYmd, tz).getTime();
+      if (cand < nowMs) {
+        return { ymd: fmtYmd(year + 1, month0, day), interpreted: 'DD/MM (rolled to next year)' };
+      }
+    }
+    return { ymd: candidate, interpreted: 'DD/MM[/YYYY]' };
+  }
+
+  // 3) Keywords: hoje, amanhã, depois de amanhã, ontem
+  if (/^hoje$/.test(text) || /^para hoje$/.test(text)) {
+    return { ymd: todayYmd, interpreted: 'hoje' };
+  }
+  if (/^amanha$/.test(text) || /^para amanha$/.test(text)) {
+    return { ymd: addDaysYmd(todayYmd, 1, tz), interpreted: 'amanhã' };
+  }
+  if (/^depois de amanha$/.test(text)) {
+    return { ymd: addDaysYmd(todayYmd, 2, tz), interpreted: 'depois de amanhã' };
+  }
+  if (/^ontem$/.test(text)) {
+    return { ymd: addDaysYmd(todayYmd, -1, tz), interpreted: 'ontem' };
+  }
+
+  // 4) "em N dias", "daqui a N dias"
+  const inDaysMatch = text.match(/^(?:em|daqui a) (\d+) dias?$/);
+  if (inDaysMatch) {
+    return { ymd: addDaysYmd(todayYmd, Number(inDaysMatch[1]), tz), interpreted: `em ${inDaysMatch[1]} dias` };
+  }
+
+  // 5) "N de Mês" — ex: "10 de junho", "10 junho", "10/junho"
+  const dayMonthMatch = text.match(/^(\d{1,2})(?:\s+de\s+|\s+|\/)([a-z]+)(?:\s+de\s+(\d{4}))?$/);
+  if (dayMonthMatch && MONTH_NAMES_PT[dayMonthMatch[2]] !== undefined) {
+    const day = Number(dayMonthMatch[1]);
+    const month0 = MONTH_NAMES_PT[dayMonthMatch[2]];
+    let year = dayMonthMatch[3] ? Number(dayMonthMatch[3]) : today.year;
+    const candidate = fmtYmd(year, month0, day);
+    if (!dayMonthMatch[3]) {
+      const cand = startOfDayInTz(candidate, tz).getTime();
+      const nowMs = startOfDayInTz(todayYmd, tz).getTime();
+      if (cand < nowMs) {
+        return { ymd: fmtYmd(year + 1, month0, day), interpreted: 'N de mês (próximo ano)' };
+      }
+    }
+    return { ymd: candidate, interpreted: 'N de mês' };
+  }
+
+  // 6) Weekday names (with optional "próxima"/"que vem")
+  const weekdayKeys = Object.keys(DAY_NAMES_PT);
+  for (const key of weekdayKeys) {
+    const stripped = stripAccentsLower(key);
+    const patterns = [
+      new RegExp(`^${stripped}$`),
+      new RegExp(`^proxima ${stripped}$`),
+      new RegExp(`^proximo ${stripped}$`),
+      new RegExp(`^${stripped} que vem$`),
+      new RegExp(`^na ${stripped}$`),
+      new RegExp(`^na proxima ${stripped}$`),
+      new RegExp(`^${stripped} proxima$`),
+    ];
+    if (patterns.some((re) => re.test(text))) {
+      const targetDow = DAY_NAMES_PT[key];
+      const todayDow = today.weekday;
+      const forceNextWeek = /proxima|proximo|que vem/.test(text);
+      let diff = (targetDow - todayDow + 7) % 7;
+      if (diff === 0 && forceNextWeek) diff = 7;
+      // If just "terça" and today IS Tuesday: keep today (diff=0). User can say "próxima" for next week.
+      const ymd = addDaysYmd(todayYmd, diff, tz);
+      const labelMap = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      return {
+        ymd,
+        weekday: targetDow,
+        weekdayName: labelMap[targetDow],
+        interpreted: forceNextWeek
+          ? `próxima ${labelMap[targetDow].toLowerCase()}`
+          : diff === 0
+          ? `${labelMap[targetDow].toLowerCase()} (hoje)`
+          : `próxima ${labelMap[targetDow].toLowerCase()}`,
+      };
+    }
+  }
+
+  return {
+    error: `Não entendi a data "${raw}". Peça ao paciente uma data específica (DD/MM ou nome do dia da semana).`,
+  };
+}
+
+async function resolveDateTool(
+  ctx: ToolContext,
+  args: { expression: string }
+): Promise<ToolResult> {
+  const result = resolveDateExpression(args.expression ?? '', ctx.timezone);
+  if (result.error) return { ok: false, error: result.error };
+  return {
+    ok: true,
+    data: {
+      input: args.expression,
+      date: result.ymd,
+      weekdayName: result.weekdayName,
+      interpreted: result.interpreted,
+      timezone: ctx.timezone,
+    },
+  };
+}
+
 async function transferToHuman(
   ctx: ToolContext,
   args: { reason?: string }
@@ -585,6 +776,21 @@ async function cancelAppointment(
 /* -------------------------------------------------------------------------- */
 
 export const toolDeclarations: FunctionDeclaration[] = [
+  {
+    name: 'resolve_date',
+    description:
+      'Converte uma expressão livre em português ("hoje", "amanhã", "terça", "próxima sexta", "10/06", "10 de junho", "em 3 dias") para uma data ISO YYYY-MM-DD no fuso da clínica. Chame esta função SEMPRE antes de usar uma data nas outras ferramentas. Não tente converter datas você mesmo.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        expression: {
+          type: Type.STRING,
+          description: 'Texto livre da data conforme o paciente disse (ex: "terça", "amanhã", "10/06")',
+        },
+      },
+      required: ['expression'],
+    },
+  },
   {
     name: 'list_services',
     description:
@@ -718,6 +924,8 @@ export async function executeTool(
 ): Promise<ToolResult> {
   try {
     switch (name) {
+      case 'resolve_date':
+        return await resolveDateTool(ctx, args);
       case 'list_services':
         return await listServices(ctx);
       case 'list_available_slots':
