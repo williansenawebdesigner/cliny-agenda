@@ -50,12 +50,12 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
               placeholder="Buscar por nome..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-lg outline-none transition-all text-sm w-full md:w-64 font-bold placeholder:text-slate-300"
+              className="pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all text-sm w-full md:w-64 font-bold placeholder:text-slate-300"
             />
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white w-10 h-10 md:w-auto md:px-5 md:py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all shrink-0 active:scale-95"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-10 h-10 md:w-auto md:px-5 md:py-2.5 rounded flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all shrink-0 active:scale-95"
           >
             <Plus size={18} />
             <span className="hidden md:inline font-bold text-sm">Novo Paciente</span>
@@ -69,8 +69,8 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
             <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredPatients.length === 0 ? (
-          <div className="bg-slate-50/50 rounded-2xl py-20 text-center flex flex-col items-center border border-dashed border-slate-100">
-             <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center text-slate-200 mb-4 shadow-sm">
+          <div className="bg-slate-50/50 rounded py-20 text-center flex flex-col items-center border border-dashed border-slate-100">
+             <div className="w-16 h-16 bg-white rounded flex items-center justify-center text-slate-200 mb-4 shadow-sm">
                 <Users size={28} />
              </div>
              <p className="text-slate-400 font-bold">Nenhum paciente encontrado.</p>
@@ -78,9 +78,9 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
         ) : (
           <div className="space-y-3">
             {filteredPatients.map((patient) => (
-              <div key={patient.id} className="p-4 md:p-5 flex items-center justify-between bg-white border border-slate-50 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all rounded-2xl group cursor-pointer shadow-sm shadow-slate-100/50">
+              <div key={patient.id} className="p-4 md:p-5 flex items-center justify-between bg-white border border-slate-50 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all rounded group cursor-pointer shadow-sm shadow-slate-100/50">
                 <div className="flex items-center gap-5">
-                   <div className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                   <div className="w-11 h-11 bg-slate-50 rounded flex items-center justify-center text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
                       <User size={20} />
                    </div>
                    <div>
@@ -94,7 +94,7 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
                    </div>
                 </div>
                 <div className="flex items-center gap-4">
-                   <button className="hidden md:block px-4 py-2 rounded-lg text-[10px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all">Prontuário</button>
+                   <button className="hidden md:block px-4 py-2 rounded text-[10px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all">Prontuário</button>
                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-200 group-hover:text-emerald-500 transition-colors">
                       <ChevronRight size={18} />
                    </div>
@@ -152,11 +152,11 @@ export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSu
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
+        className="relative bg-white w-full max-w-lg rounded shadow-2xl overflow-hidden"
       >
         <div className="p-8 border-b border-slate-50 flex items-center justify-between">
           <h3 className="text-xl font-bold tracking-tight">Novo Paciente</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded transition-colors">
             <X size={20} className="text-slate-300" />
           </button>
         </div>
@@ -169,7 +169,7 @@ export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSu
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
+              className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
               placeholder="Nome do paciente"
             />
           </div>
@@ -181,14 +181,14 @@ export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSu
               required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
+              className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
               placeholder="Ex: 44 99912-3456"
             />
           </div>
 
           <button 
             disabled={submitting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
           >
             {submitting ? (
                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

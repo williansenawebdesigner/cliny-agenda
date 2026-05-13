@@ -66,7 +66,7 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
         </div>
         <button 
           onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full md:w-auto md:px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full md:w-auto md:px-6 py-2.5 rounded flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
         >
           <Plus size={18} />
           Novo Profissional
@@ -78,15 +78,15 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
           <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : professionals.length === 0 ? (
-        <div className="bg-slate-50/50 rounded-2xl p-12 text-center flex flex-col items-center border border-dashed border-slate-100">
-          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
+        <div className="bg-slate-50/50 rounded p-12 text-center flex flex-col items-center border border-dashed border-slate-100">
+          <div className="w-16 h-16 bg-white rounded flex items-center justify-center text-slate-200 mb-6 shadow-sm">
              <User size={28} />
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-2">Sua equipe está vazia</h3>
           <p className="text-sm text-slate-400 max-w-xs mb-8 leading-relaxed font-medium">Adicione os profissionais e seus respectivos serviços.</p>
           <button 
             onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
-            className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+            className="bg-emerald-600 text-white px-8 py-3 rounded font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
           >
             Adicionar Profissional
           </button>
@@ -125,9 +125,9 @@ function ProfessionalCard({ professional, onEdit, onDelete }: { professional: Pr
   const services = professional.services || [];
 
   return (
-    <div className="bg-white p-6 rounded-2xl hover:border-emerald-100 border border-slate-50 transition-all group relative flex flex-col justify-between shadow-sm shadow-slate-100/50">
+    <div className="bg-white p-6 rounded hover:border-emerald-100 border border-slate-50 transition-all group relative flex flex-col justify-between shadow-sm shadow-slate-100/50">
       <div>
-        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-xl flex items-center justify-center mb-6 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-inner">
+        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded flex items-center justify-center mb-6 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-inner">
           <User size={24} />
         </div>
         <h4 className="font-bold text-slate-900 text-base leading-tight group-hover:text-emerald-700 transition-colors tracking-tight">{professional.name}</h4>
@@ -138,7 +138,7 @@ function ProfessionalCard({ professional, onEdit, onDelete }: { professional: Pr
              <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Serviços ({services.length})</p>
              <div className="flex flex-wrap gap-1.5">
                {services.slice(0, 3).map(p => (
-                 <span key={p.id} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded-lg leading-none font-bold border border-slate-100/50">
+                 <span key={p.id} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded leading-none font-bold border border-slate-100/50">
                    {p.name}
                  </span>
                ))}
@@ -149,15 +149,15 @@ function ProfessionalCard({ professional, onEdit, onDelete }: { professional: Pr
       </div>
       
       <div className="mt-8 flex items-center justify-between border-t border-slate-50 pt-4">
-        <div className="flex items-center gap-1.5 text-[10px] bg-emerald-50 px-2 py-1 rounded-lg">
+        <div className="flex items-center gap-1.5 text-[10px] bg-emerald-50 px-2 py-1 rounded">
            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
            <span className="font-bold text-emerald-600">Ativo</span>
         </div>
         <div className="flex gap-1">
-           <button onClick={onEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all">
+           <button onClick={onEdit} className="w-8 h-8 rounded flex items-center justify-center text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all">
              <Edit2 size={14} />
            </button>
-           <button onClick={onDelete} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+           <button onClick={onDelete} className="w-8 h-8 rounded flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
              <Trash2 size={14} />
            </button>
         </div>
@@ -279,7 +279,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="relative bg-white w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col"
+        className="relative bg-white w-full max-w-3xl max-h-[90vh] overflow-hidden rounded shadow-2xl flex flex-col"
       >
         <div className="p-8 border-b border-slate-50 sticky top-0 bg-white z-10 shrink-0">
           <div className="flex items-center justify-between mb-6">
@@ -287,11 +287,11 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
               <h3 className="text-2xl font-bold tracking-tight text-slate-900">{existing ? 'Editar Profissional' : 'Novo Profissional'}</h3>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Identidade, serviços e modo de atendimento.</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded transition-colors">
               <X size={20} className="text-slate-300" />
             </button>
           </div>
-          <div className="flex gap-1 bg-slate-50 p-1 rounded-2xl">
+          <div className="flex gap-1 bg-slate-50 p-1 rounded">
             {(
               [
                 ['identity', 'Dados & Serviços', <User size={14} key="i" />],
@@ -303,7 +303,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                 type="button"
                 onClick={() => setTab(key)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all',
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded text-xs font-bold transition-all',
                   tab === key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-900'
                 )}
               >
@@ -325,7 +325,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                  required
                  value={name}
                  onChange={(e) => setName(e.target.value)}
-                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm shadow-inner"
+                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-sm shadow-inner"
                />
              </div>
              <div className="space-y-2">
@@ -335,7 +335,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                  required
                  value={email}
                  onChange={(e) => setEmail(e.target.value)}
-                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm shadow-inner"
+                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-sm shadow-inner"
                />
              </div>
              <div className="space-y-2">
@@ -344,7 +344,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                  type="text" 
                  value={specialty}
                  onChange={(e) => setSpecialty(e.target.value)}
-                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm shadow-inner"
+                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-sm shadow-inner"
                  placeholder="Ex: Clínico Geral"
                />
              </div>
@@ -360,7 +360,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
              
              <div className="flex flex-col gap-3">
                {services.map((svc) => (
-                  <div key={svc.id} className="flex gap-3 items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                  <div key={svc.id} className="flex gap-3 items-center bg-slate-50/50 p-4 rounded border border-slate-100">
                      <div className="flex-1">
                         <input 
                           type="text" 
@@ -376,7 +376,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                           placeholder="Min" 
                           value={svc.duration}
                           onChange={(e) => updateService(svc.id, 'duration', Number(e.target.value))}
-                          className="w-full bg-white px-2 py-2 rounded-lg border border-slate-100 outline-none focus:border-emerald-500 font-bold text-xs text-slate-700"
+                          className="w-full bg-white px-2 py-2 rounded border border-slate-100 outline-none focus:border-emerald-500 font-bold text-xs text-slate-700"
                         />
                      </div>
                      <div className="w-24 relative">
@@ -385,16 +385,16 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                           placeholder="Preço" 
                           value={svc.price}
                           onChange={(e) => updateService(svc.id, 'price', Number(e.target.value))}
-                          className="w-full bg-white px-2 py-2 rounded-lg border border-slate-100 outline-none focus:border-emerald-500 font-bold text-xs text-slate-700"
+                          className="w-full bg-white px-2 py-2 rounded border border-slate-100 outline-none focus:border-emerald-500 font-bold text-xs text-slate-700"
                         />
                      </div>
-                     <button type="button" onClick={() => removeService(svc.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors bg-white rounded-lg border border-slate-100">
+                     <button type="button" onClick={() => removeService(svc.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors bg-white rounded border border-slate-100">
                         <Trash2 size={14} />
                      </button>
                   </div>
                ))}
                {services.length === 0 && (
-                 <div className="text-center py-10 text-xs font-bold text-slate-300 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
+                 <div className="text-center py-10 text-xs font-bold text-slate-300 bg-slate-50/30 rounded border border-dashed border-slate-200">
                     Nenhum serviço cadastrado.
                  </div>
                )}
@@ -410,12 +410,12 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                   type="button"
                   onClick={() => setBookingMode('slot')}
                   className={cn(
-                    'p-6 rounded-2xl border-2 transition-all text-left group',
+                    'p-6 rounded border-2 transition-all text-left group',
                     bookingMode === 'slot' ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-50 hover:border-slate-100 bg-slate-50/30'
                   )}
                 >
                   <div className="flex items-center gap-4 mb-3">
-                    <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-all', bookingMode === 'slot' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-300')}>
+                    <div className={cn('w-12 h-12 rounded flex items-center justify-center transition-all', bookingMode === 'slot' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-300')}>
                       <Clock size={24} />
                     </div>
                     <h4 className="font-bold text-slate-900">Hora Marcada</h4>
@@ -428,12 +428,12 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                   type="button"
                   onClick={() => setBookingMode('walk_in')}
                   className={cn(
-                    'p-6 rounded-2xl border-2 transition-all text-left group',
+                    'p-6 rounded border-2 transition-all text-left group',
                     bookingMode === 'walk_in' ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-50 hover:border-slate-100 bg-slate-50/30'
                   )}
                 >
                   <div className="flex items-center gap-4 mb-3">
-                    <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-all', bookingMode === 'walk_in' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-300')}>
+                    <div className={cn('w-12 h-12 rounded flex items-center justify-center transition-all', bookingMode === 'walk_in' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-300')}>
                       <UsersIcon size={24} />
                     </div>
                     <h4 className="font-bold text-slate-900">Ordem de Chegada</h4>
@@ -449,12 +449,12 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                 {WEEKDAY_KEYS.map((dayKey) => {
                   const periods = walkInPeriods[dayKey] ?? [];
                   return (
-                    <div key={dayKey} className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100">
+                    <div key={dayKey} className="bg-slate-50/50 rounded p-5 border border-slate-100">
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="font-bold text-sm text-slate-900 uppercase tracking-tight">{WEEKDAY_LABELS_PT[dayKey]}</h4>
                         <div className="flex items-center gap-3">
                           {periods.length === 0 ? (
-                            <button type="button" onClick={() => fillDayWithDefaults(dayKey)} className="text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg transition-all uppercase tracking-widest">
+                            <button type="button" onClick={() => fillDayWithDefaults(dayKey)} className="text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded transition-all uppercase tracking-widest">
                               + Adicionar Padrão
                             </button>
                           ) : (
@@ -469,11 +469,11 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
                       {periods.length > 0 && (
                         <div className="space-y-2">
                           {periods.map((p) => (
-                            <div key={p.id} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                            <div key={p.id} className="flex items-center gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
                               <input value={p.label} onChange={(e) => updatePeriod(dayKey, p.id, { label: e.target.value })} placeholder="Período" className="flex-1 px-3 py-2 bg-transparent outline-none font-bold text-sm" />
-                              <input type="time" value={p.start} onChange={(e) => updatePeriod(dayKey, p.id, { start: e.target.value })} className="w-24 px-2 py-2 bg-slate-50 rounded-lg text-xs font-bold" />
-                              <input type="time" value={p.end} onChange={(e) => updatePeriod(dayKey, p.id, { end: e.target.value })} className="w-24 px-2 py-2 bg-slate-50 rounded-lg text-xs font-bold" />
-                              <input type="number" value={p.capacity} onChange={(e) => updatePeriod(dayKey, p.id, { capacity: Number(e.target.value) })} className="w-16 px-2 py-2 bg-slate-50 rounded-lg text-xs font-bold text-center" />
+                              <input type="time" value={p.start} onChange={(e) => updatePeriod(dayKey, p.id, { start: e.target.value })} className="w-24 px-2 py-2 bg-slate-50 rounded text-xs font-bold" />
+                              <input type="time" value={p.end} onChange={(e) => updatePeriod(dayKey, p.id, { end: e.target.value })} className="w-24 px-2 py-2 bg-slate-50 rounded text-xs font-bold" />
+                              <input type="number" value={p.capacity} onChange={(e) => updatePeriod(dayKey, p.id, { capacity: Number(e.target.value) })} className="w-16 px-2 py-2 bg-slate-50 rounded text-xs font-bold text-center" />
                               <button type="button" onClick={() => removePeriod(dayKey, p.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
                             </div>
                           ))}
@@ -490,7 +490,7 @@ function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Profess
         <div className="pt-4 pb-0">
           <button
             disabled={submitting}
-            className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+            className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold py-5 rounded shadow-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
           >
             {submitting ? (
                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />

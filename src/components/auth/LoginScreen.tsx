@@ -34,10 +34,10 @@ export function LoginScreen({
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-8 md:p-12"
+        className="max-w-md w-full bg-white rounded shadow-xl shadow-slate-200/50 p-8 md:p-12"
       >
         <div className="flex flex-col items-center text-center mb-10">
-          <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-emerald-100">
+          <div className="w-14 h-14 bg-emerald-500 rounded flex items-center justify-center text-white mb-6 shadow-lg shadow-emerald-100">
             <Stethoscope size={28} strokeWidth={2.5} />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bem-vindo ao Cliny.</h1>
@@ -47,7 +47,7 @@ export function LoginScreen({
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm font-medium animate-shake">
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded flex items-center gap-3 text-red-600 text-sm font-medium animate-shake">
             <AlertCircle size={18} />
             {error}
           </div>
@@ -64,7 +64,7 @@ export function LoginScreen({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-slate-900"
+                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-semibold text-slate-900"
               />
             </div>
           </div>
@@ -88,7 +88,7 @@ export function LoginScreen({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-slate-900"
+                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-semibold text-slate-900"
               />
             </div>
           </div>
@@ -96,7 +96,7 @@ export function LoginScreen({
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+            className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold py-4 rounded shadow-lg shadow-slate-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

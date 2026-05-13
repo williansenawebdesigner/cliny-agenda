@@ -120,14 +120,14 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 shadow-inner">
+          <div className="flex items-center bg-slate-50 p-1 rounded border border-slate-100 shadow-inner">
             <ViewTab active={viewMode === 'month'} onClick={() => setViewMode('month')} icon={<LayoutGrid size={14} />} label="Mês" />
             <ViewTab active={viewMode === 'week'} onClick={() => setViewMode('week')} icon={<CalendarRange size={14} />} label="Semana" />
             <ViewTab active={viewMode === 'day'} onClick={() => setViewMode('day')} icon={<CalendarDays size={14} />} label="Dia" />
           </div>
 
-          <div className="flex items-center bg-white border border-slate-100 p-1.5 rounded-xl gap-2 shadow-sm">
-            <button onClick={handlePrev} className="p-2 hover:bg-slate-50 rounded-lg transition-all text-slate-400">
+          <div className="flex items-center bg-white border border-slate-100 p-1.5 rounded gap-2 shadow-sm">
+            <button onClick={handlePrev} className="p-2 hover:bg-slate-50 rounded transition-all text-slate-400">
               <ChevronLeft size={16} />
             </button>
             <div className="px-4 py-1 text-center min-w-[140px]">
@@ -137,14 +137,14 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
                   : format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
               </span>
             </div>
-            <button onClick={handleNext} className="p-2 hover:bg-slate-50 rounded-lg transition-all text-slate-400">
+            <button onClick={handleNext} className="p-2 hover:bg-slate-50 rounded transition-all text-slate-400">
               <ChevronRight size={16} />
             </button>
           </div>
 
           <button 
             onClick={() => fetchData()}
-            className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-emerald-600 transition-all shadow-sm"
+            className="p-3 bg-white border border-slate-100 rounded text-slate-400 hover:text-emerald-600 transition-all shadow-sm"
             title="Atualizar"
           >
             <RotateCcw size={16} className={cn(loading && "animate-spin")} />
@@ -153,13 +153,13 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
       </div>
 
       {/* Filters Bar */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-4 bg-white p-4 rounded border border-slate-100 shadow-sm overflow-x-auto no-scrollbar">
          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest whitespace-nowrap">Filtrar por profissional:</span>
          <div className="flex items-center gap-2">
             <button 
               onClick={() => setProfFilter('all')}
               className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap",
+                "px-4 py-2 rounded text-xs font-bold border transition-all whitespace-nowrap",
                 profFilter === 'all' ? "bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-200" : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
               )}
             >
@@ -170,7 +170,7 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
                 key={prof.id}
                 onClick={() => setProfFilter(prof.id)}
                 className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap flex items-center gap-2",
+                  "px-4 py-2 rounded text-xs font-bold border transition-all whitespace-nowrap flex items-center gap-2",
                   profFilter === prof.id ? "bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-100" : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
                 )}
               >
@@ -181,7 +181,7 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
          </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden h-[calc(100vh-320px)] min-h-[500px] flex flex-col relative">
+      <div className="bg-white rounded border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden h-[calc(100vh-320px)] min-h-[500px] flex flex-col relative">
         {loading ? (
           <div className="flex-1 flex items-center justify-center bg-white/50 backdrop-blur-sm z-50">
             <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -277,7 +277,7 @@ function ViewTab({ active, onClick, icon, label }: { active: boolean, onClick: (
     <button 
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all",
+        "flex items-center gap-2 px-5 py-2 rounded text-xs font-bold transition-all",
         active ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
       )}
     >
@@ -316,14 +316,14 @@ function MonthCalendar({ date, appointments, onSelectDate }: { date: Date, appoi
               )}
             >
               <span className={cn(
-                 "text-xs font-bold inline-block w-7 h-7 text-center leading-7 rounded-lg mb-2 transition-all shadow-sm",
+                 "text-xs font-bold inline-block w-7 h-7 text-center leading-7 rounded mb-2 transition-all shadow-sm",
                  isSameDay(day, new Date()) ? "bg-emerald-600 text-white" : "text-slate-400 bg-white group-hover:text-emerald-600 group-hover:bg-emerald-50"
               )}>
                 {format(day, 'd')}
               </span>
               <div className="space-y-1.5">
                 {dayApps.slice(0, 3).map(app => (
-                  <div key={`month-app-${app.id}`} className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg border border-emerald-100/50 truncate font-bold shadow-sm">
+                  <div key={`month-app-${app.id}`} className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100/50 truncate font-bold shadow-sm">
                     {format(new Date(app.startTime), 'HH:mm')}
                   </div>
                 ))}
@@ -396,7 +396,7 @@ function WeekTimeline({ selectedDate, appointments, slotInterval, onSelectAppoin
                          e.stopPropagation();
                          onSelectAppointment(app);
                        }}
-                       className="absolute inset-x-1.5 top-1.5 bottom-1.5 bg-emerald-600 text-white rounded-xl p-2.5 z-10 shadow-lg shadow-emerald-200/50 text-left overflow-hidden cursor-pointer hover:bg-emerald-700 hover:scale-[1.02] transition-all"
+                       className="absolute inset-x-1.5 top-1.5 bottom-1.5 bg-emerald-600 text-white rounded p-2.5 z-10 shadow-lg shadow-emerald-200/50 text-left overflow-hidden cursor-pointer hover:bg-emerald-700 hover:scale-[1.02] transition-all"
                      >
                         <p className="text-[10px] font-bold leading-none mb-1.5 flex items-center gap-1">
                           <Clock size={10} />
@@ -474,7 +474,7 @@ function DayTimeline({ selectedDate, appointments, patients, professionals, proc
             }}
           >
             <div className="w-3 h-3 rounded-full bg-red-500 -ml-1.5 shadow-lg shadow-red-200" />
-            <div className="px-2 py-1 bg-red-500 text-white text-[8px] font-bold rounded-lg -ml-1.5 uppercase tracking-widest shadow-lg">Agora</div>
+            <div className="px-2 py-1 bg-red-500 text-white text-[8px] font-bold rounded -ml-1.5 uppercase tracking-widest shadow-lg">Agora</div>
           </div>
         )}
 
@@ -498,14 +498,14 @@ function DayTimeline({ selectedDate, appointments, patients, professionals, proc
                 height: Math.max(height, 50)
               }}
               className={cn(
-                "absolute left-4 right-4 p-4 bg-white border border-slate-100 rounded-2xl shadow-xl shadow-slate-200/50 flex flex-col justify-between group hover:border-emerald-500 hover:shadow-2xl hover:scale-[1.01] transition-all cursor-pointer z-20 overflow-hidden",
+                "absolute left-4 right-4 p-4 bg-white border border-slate-100 rounded shadow-xl shadow-slate-200/50 flex flex-col justify-between group hover:border-emerald-500 hover:shadow-2xl hover:scale-[1.01] transition-all cursor-pointer z-20 overflow-hidden",
                 app.status === 'cancelled' && "opacity-50 grayscale border-red-100"
               )}
             >
               <div className="flex items-start justify-between gap-4">
                  <div className="flex items-center gap-4 min-w-0">
                     <div className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner transition-colors",
+                      "w-10 h-10 rounded flex items-center justify-center shrink-0 shadow-inner transition-colors",
                       app.status === 'confirmed' ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400"
                     )}>
                        <User size={18} />
@@ -516,7 +516,7 @@ function DayTimeline({ selectedDate, appointments, patients, professionals, proc
                     </div>
                  </div>
                  <div className="text-right shrink-0">
-                    <span className="text-xs font-bold text-slate-900 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{format(start, 'HH:mm')}</span>
+                    <span className="text-xs font-bold text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-100">{format(start, 'HH:mm')}</span>
                     <div className={cn(
                       "text-[8px] font-bold uppercase tracking-tighter mt-2 px-1.5 py-0.5 rounded-full inline-block",
                       app.status === 'confirmed' ? "bg-emerald-100 text-emerald-600" : 
@@ -531,13 +531,13 @@ function DayTimeline({ selectedDate, appointments, patients, professionals, proc
               {height > 80 && (
                 <div className="flex items-center gap-5 pt-3 border-t border-slate-50 mt-3">
                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                      <div className="w-5 h-5 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300">
+                      <div className="w-5 h-5 bg-slate-50 rounded flex items-center justify-center text-slate-300">
                         <User size={12} />
                       </div>
                       {prof?.name?.split(' ')[0]}
                    </div>
                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                      <div className="w-5 h-5 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300">
+                      <div className="w-5 h-5 bg-slate-50 rounded flex items-center justify-center text-slate-300">
                         <Clock size={12} />
                       </div>
                       {duration} min
@@ -602,31 +602,31 @@ function AppointmentDetailDrawer({ appointment, patient, professional, procedure
          animate={{ x: 0 }}
          exit={{ x: '100%' }}
          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-         className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col border-l border-slate-100 rounded-l-3xl"
+         className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col border-l border-slate-100 rounded-l"
        >
           <div className="flex items-center justify-between p-8 border-b border-slate-50">
              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Detalhes</h3>
-             <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded-2xl text-slate-300 transition-all">
+             <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded text-slate-300 transition-all">
                 <X size={24} />
              </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-10 space-y-10 no-scrollbar">
              <div className="flex items-center gap-6">
-                <div className="w-20 h-20 rounded-3xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-100">
+                <div className="w-20 h-20 rounded bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-100">
                    <User size={36} />
                 </div>
                 <div className="space-y-2 min-w-0">
                    <h4 className="text-2xl font-bold text-slate-900 leading-tight truncate">{patient?.name || 'Paciente'}</h4>
                    <div className="flex flex-wrap items-center gap-3">
-                      <a href={`tel:${patient?.phone}`} className="px-3 py-1 bg-slate-50 rounded-lg text-xs font-bold text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-slate-100">
+                      <a href={`tel:${patient?.phone}`} className="px-3 py-1 bg-slate-50 rounded text-xs font-bold text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-slate-100">
                          {patient?.phone}
                       </a>
                    </div>
                 </div>
              </div>
 
-             <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-6 rounded-3xl border border-slate-100 relative">
+             <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-6 rounded border border-slate-100 relative">
                 <div className="space-y-1">
                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Horário</span>
                    <p className="font-bold text-slate-900 text-lg flex items-center gap-2">
@@ -649,7 +649,7 @@ function AppointmentDetailDrawer({ appointment, patient, professional, procedure
 
              <div className="space-y-6">
                 <div className="flex items-center gap-4">
-                   <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
+                   <div className="w-10 h-10 rounded bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
                       <User size={18} />
                    </div>
                    <div>
@@ -658,7 +658,7 @@ function AppointmentDetailDrawer({ appointment, patient, professional, procedure
                    </div>
                 </div>
                 {appointment.notes && (
-                  <div className="bg-emerald-50/30 p-5 rounded-2xl border border-emerald-100/30">
+                  <div className="bg-emerald-50/30 p-5 rounded border border-emerald-100/30">
                     <div className="flex items-center gap-2 mb-2">
                        <FileText size={14} className="text-emerald-500" />
                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Observações</span>
@@ -669,12 +669,12 @@ function AppointmentDetailDrawer({ appointment, patient, professional, procedure
              </div>
           </div>
 
-          <div className="p-8 border-t border-slate-50 space-y-4 bg-slate-50/30 rounded-t-3xl">
+          <div className="p-8 border-t border-slate-50 space-y-4 bg-slate-50/30 rounded-t">
              <div className="grid grid-cols-2 gap-4">
                 <button 
                   onClick={() => handleStatusUpdate('confirmed')}
                   disabled={loading || appointment.status === 'confirmed'}
-                  className="flex items-center justify-center gap-3 px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-sm hover:bg-emerald-700 transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-emerald-100"
+                  className="flex items-center justify-center gap-3 px-6 py-4 bg-emerald-600 text-white rounded font-bold text-sm hover:bg-emerald-700 transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-emerald-100"
                 >
                    <CheckCircle size={20} />
                    Confirmar
@@ -682,7 +682,7 @@ function AppointmentDetailDrawer({ appointment, patient, professional, procedure
                 <button 
                   onClick={() => handleStatusUpdate('cancelled')}
                   disabled={loading || appointment.status === 'cancelled'}
-                  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-red-100 text-red-500 rounded-2xl font-bold text-sm hover:bg-red-50 transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-red-100 text-red-500 rounded font-bold text-sm hover:bg-red-50 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                    <X size={20} />
                    Cancelar
@@ -692,14 +692,14 @@ function AppointmentDetailDrawer({ appointment, patient, professional, procedure
              <div className="grid grid-cols-2 gap-4">
                 <button 
                   onClick={onEdit}
-                  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all"
+                  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-100 text-slate-600 rounded font-bold text-sm hover:bg-slate-50 transition-all"
                 >
                    <Edit2 size={16} />
                    Editar
                 </button>
                 <button 
                   onClick={handleDelete}
-                  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-100 text-slate-400 hover:text-red-500 transition-all rounded-2xl font-bold text-sm"
+                  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-100 text-slate-400 hover:text-red-500 transition-all rounded font-bold text-sm"
                 >
                    <Trash2 size={16} />
                    Excluir

@@ -115,11 +115,11 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative bg-white w-full max-w-2xl rounded shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         <div className="p-8 border-b border-slate-50 flex items-center justify-between shrink-0 bg-white z-10">
           <div className="flex items-center gap-5">
-             <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-100">
+             <div className="w-12 h-12 bg-emerald-500 text-white rounded flex items-center justify-center shadow-lg shadow-emerald-100">
                 {existingAppointment ? <Edit2 size={22} /> : <Plus size={22} />}
              </div>
              <div>
@@ -131,7 +131,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                 </p>
              </div>
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded-2xl transition-all">
+          <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded transition-all">
             <X size={24} className="text-slate-300" />
           </button>
         </div>
@@ -163,10 +163,10 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                       setPatientSearch(e.target.value);
                       setSelectedPatientId('');
                     }}
-                    className="w-full pl-16 pr-6 py-4.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
+                    className="w-full pl-16 pr-6 py-4.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
                   />
                   {patientSearch && !selectedPatientId && filteredPatients.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-4 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 max-h-64 overflow-y-auto p-3 flex flex-col gap-1">
+                    <div className="absolute top-full left-0 right-0 mt-4 bg-white border border-slate-100 rounded shadow-2xl z-50 max-h-64 overflow-y-auto p-3 flex flex-col gap-1">
                        {filteredPatients.map(p => (
                          <button
                            key={p.id}
@@ -175,9 +175,9 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                              setSelectedPatientId(p.id);
                              setPatientSearch(p.name);
                            }}
-                           className="w-full text-left p-4 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-4 group"
+                           className="w-full text-left p-4 hover:bg-emerald-50 rounded transition-all flex items-center gap-4 group"
                          >
-                            <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                            <div className="w-10 h-10 bg-slate-50 rounded flex items-center justify-center text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
                                <User size={18} />
                             </div>
                             <div className="flex flex-col">
@@ -199,7 +199,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                     required
                     value={selectedProfessionalId}
                     onChange={(e) => setSelectedProfessionalId(e.target.value)}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 appearance-none cursor-pointer shadow-inner"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 appearance-none cursor-pointer shadow-inner"
                   >
                     <option value="">Quem irá atender?</option>
                     {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -213,7 +213,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                     value={selectedServiceId}
                     onChange={(e) => setSelectedServiceId(e.target.value)}
                     disabled={!selectedProfessionalId}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 appearance-none cursor-pointer disabled:opacity-50 shadow-inner"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 appearance-none cursor-pointer disabled:opacity-50 shadow-inner"
                   >
                     <option value="">O que será realizado?</option>
                     {selectedProfServices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -230,7 +230,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 shadow-inner"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 shadow-inner"
                   />
                 </div>
 
@@ -241,7 +241,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                     required
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 shadow-inner"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 shadow-inner"
                   />
                 </div>
               </div>
@@ -251,7 +251,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                 <textarea 
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-6 py-5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 min-h-[140px] resize-none placeholder:text-slate-300 shadow-inner"
+                  className="w-full px-6 py-5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 min-h-[140px] resize-none placeholder:text-slate-300 shadow-inner"
                   placeholder="Instruções internas, sintomas relatados, etc..."
                 />
               </div>
@@ -259,7 +259,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
           )}
         </div>
 
-        <div className="p-10 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0 rounded-t-3xl">
+        <div className="p-10 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0 rounded-t">
           <button 
             type="button" 
             onClick={onClose}
@@ -270,7 +270,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
           <button 
             onClick={handleSubmit}
             disabled={submitting || !selectedPatientId || !selectedProfessionalId || !selectedServiceId}
-            className="px-12 py-5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-[0.98] flex items-center gap-3"
+            className="px-12 py-5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold rounded shadow-xl shadow-slate-200 transition-all active:scale-[0.98] flex items-center gap-3"
           >
             {submitting ? (
                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />

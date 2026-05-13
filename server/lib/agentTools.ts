@@ -31,7 +31,9 @@ function buildSlotsForProfessional(
 ): string[] {
   const dayIndex = dayOfWeekInTz(startOfDayInTz(ymd, tz), tz);
   const key = DAY_KEYS[dayIndex];
-  if (!schedule) {
+  // Empty object {} = schedule not configured yet; fall back to 09-18 defaults.
+  const hasSchedule = schedule && Object.keys(schedule).length > 0;
+  if (!hasSchedule) {
     const out: string[] = [];
     for (let h = 9; h < 18; h++) {
       out.push(`${pad(h)}:00`);
@@ -39,7 +41,7 @@ function buildSlotsForProfessional(
     }
     return out;
   }
-  return schedule[key] ?? [];
+  return schedule![key] ?? [];
 }
 
 async function findProfessional(ctx: ToolContext, professionalId?: string) {

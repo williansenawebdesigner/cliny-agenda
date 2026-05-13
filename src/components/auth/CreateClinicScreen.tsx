@@ -46,7 +46,7 @@ export function CreateClinicScreen() {
         className="max-w-xl w-full"
       >
         <div className="flex flex-col items-center text-center mb-12">
-           <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 mb-8 font-bold text-xl shadow-inner">
+           <div className="w-16 h-16 bg-emerald-50 rounded flex items-center justify-center text-emerald-500 mb-8 font-bold text-xl shadow-inner">
               1
            </div>
            <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-4">Configuração Inicial.</h1>
@@ -55,9 +55,9 @@ export function CreateClinicScreen() {
            </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 bg-slate-50/50 p-8 rounded-3xl border border-slate-100">
+        <form onSubmit={handleSubmit} className="space-y-6 bg-slate-50/50 p-8 rounded border border-slate-100">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 text-sm font-medium">
+            <div className="p-4 bg-red-50 border border-red-100 rounded flex items-start gap-3 text-red-600 text-sm font-medium">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -73,7 +73,7 @@ export function CreateClinicScreen() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Consultório Dra. Ana"
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded-xl outline-none transition-all font-semibold text-slate-900 shadow-sm"
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded outline-none transition-all font-semibold text-slate-900 shadow-sm"
               />
             </div>
           </div>
@@ -88,7 +88,7 @@ export function CreateClinicScreen() {
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="DDD + Número"
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded-xl outline-none transition-all font-semibold text-slate-900 shadow-sm"
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded outline-none transition-all font-semibold text-slate-900 shadow-sm"
               />
             </div>
           </div>
@@ -100,7 +100,7 @@ export function CreateClinicScreen() {
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded-xl outline-none transition-all font-semibold text-slate-900 shadow-sm cursor-pointer appearance-none"
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded outline-none transition-all font-semibold text-slate-900 shadow-sm cursor-pointer appearance-none"
               >
                 {COMMON_TIMEZONES.map((tz) => (
                   <option key={tz.id} value={tz.id}>{tz.label}</option>
@@ -112,7 +112,7 @@ export function CreateClinicScreen() {
           <button 
             type="submit"
             disabled={submitting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
           >
             {submitting ? (
               <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />

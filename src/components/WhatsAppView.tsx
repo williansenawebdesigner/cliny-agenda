@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Clock, Sparkles, MessageCircle } from 'lucide-react';
+import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Sparkles, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { WhatsAppInstance, Professional, AgentConfig, DEFAULT_AGENT_CONFIG } from '../types';
@@ -9,13 +9,10 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInstance, setEditingInstance] = useState<WhatsAppInstance | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -33,16 +30,6 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
     }
   };
 
-  const openNewModal = () => {
-    setEditingInstance(null);
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (inst: WhatsAppInstance) => {
-    setEditingInstance(inst);
-    setIsModalOpen(true);
-  };
-
   const toggleAgent = async (inst: WhatsAppInstance) => {
     const cur = inst.agent?.enabled ?? true;
     try {
@@ -56,49 +43,49 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
   };
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col md:flex-row justify-between gap-6 md:items-end">
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row justify-between gap-4 md:items-end">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Conexões WhatsApp</h2>
-          <p className="text-slate-400 font-medium mt-1 text-sm uppercase tracking-widest">Gestão de instâncias e IA</p>
+          <p className="text-slate-500 font-medium mt-1 text-sm">Gestão de instâncias e agente de IA</p>
         </div>
         <button
-          onClick={openNewModal}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
+          onClick={() => { setEditingInstance(null); setIsModalOpen(true); }}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded flex items-center justify-center gap-2 shadow-sm transition-all font-bold active:scale-95 shrink-0 text-sm"
         >
-          <Plus size={20} />
-          <span>Conectar Número</span>
+          <Plus size={18} />
+          Conectar Número
         </button>
       </div>
 
       {loading ? (
         <div className="flex justify-center p-20">
-          <RefreshCcw className="animate-spin text-emerald-500 w-10 h-10" />
+          <RefreshCcw className="animate-spin text-emerald-500 w-8 h-8" />
         </div>
       ) : instances.length === 0 ? (
-        <div className="bg-slate-50/50 rounded-3xl p-20 text-center flex flex-col items-center border border-dashed border-slate-100">
-          <div className="w-20 h-20 bg-white border border-slate-50 rounded-3xl flex items-center justify-center text-slate-200 mb-8 shadow-sm">
-            <Phone size={36} />
+        <div className="bg-slate-50 rounded p-16 text-center flex flex-col items-center border border-dashed border-slate-200">
+          <div className="w-16 h-16 bg-white border border-slate-200 rounded flex items-center justify-center text-slate-300 mb-6 shadow-sm">
+            <Phone size={28} />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">Nenhuma instância encontrada</h3>
-          <p className="text-sm text-slate-400 max-w-sm mb-10 leading-relaxed font-medium">
-            Conecte seu WhatsApp para que o Cliny possa realizar agendamentos automáticos e atender seus pacientes.
+          <h3 className="text-lg font-bold text-slate-900 mb-2">Nenhuma instância encontrada</h3>
+          <p className="text-sm text-slate-500 max-w-sm mb-8 leading-relaxed font-medium">
+            Conecte seu WhatsApp para que o Cliny possa realizar agendamentos automáticos.
           </p>
           <button
-            onClick={openNewModal}
-            className="bg-slate-900 hover:bg-slate-800 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 transition-all active:scale-95"
+            onClick={() => { setEditingInstance(null); setIsModalOpen(true); }}
+            className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded font-bold shadow-sm transition-all active:scale-95"
           >
             Começar agora
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-8">
+        <div className="flex flex-col gap-4">
           {instances.map((inst) => (
             <InstanceCard
               key={inst.id}
               instance={inst}
               professionals={professionals}
-              onEdit={() => openEditModal(inst)}
+              onEdit={() => { setEditingInstance(inst); setIsModalOpen(true); }}
               onToggleAgent={() => toggleAgent(inst)}
               onRefresh={fetchData}
             />
@@ -113,10 +100,7 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
             existing={editingInstance}
             professionals={professionals}
             onClose={() => setIsModalOpen(false)}
-            onSuccess={() => {
-              setIsModalOpen(false);
-              fetchData();
-            }}
+            onSuccess={() => { setIsModalOpen(false); fetchData(); }}
           />
         )}
       </AnimatePresence>
@@ -124,7 +108,13 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
   );
 }
 
-function InstanceCard({ instance, professionals, onEdit, onToggleAgent, onRefresh }: { instance: WhatsAppInstance, professionals: Professional[], onEdit: () => void, onToggleAgent: () => void, onRefresh: () => void }) {
+function InstanceCard({ instance, professionals, onEdit, onToggleAgent, onRefresh }: {
+  instance: WhatsAppInstance;
+  professionals: Professional[];
+  onEdit: () => void;
+  onToggleAgent: () => void;
+  onRefresh: () => void;
+}) {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [status, setStatus] = useState(instance.status);
   const [loading, setLoading] = useState(false);
@@ -136,9 +126,9 @@ function InstanceCard({ instance, professionals, onEdit, onToggleAgent, onRefres
   const createAndConnect = async () => {
     setLoading(true);
     try {
-      const data = await api.post<any>('/api/evolution/instance', { 
-        instanceName: instance.instanceName, 
-        prompt: instance.prompt 
+      const data = await api.post<any>('/api/evolution/instance', {
+        instanceName: instance.instanceName,
+        prompt: instance.prompt,
       });
       if (data.qrcode?.base64) {
         setQrCode(data.qrcode.base64);
@@ -187,119 +177,128 @@ function InstanceCard({ instance, professionals, onEdit, onToggleAgent, onRefres
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-xl shadow-slate-100/50">
-      <div className="flex-1 p-10 flex flex-col justify-between">
-        <div className="space-y-8">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{instance.name}</h3>
-              <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-1">ID: {instance.instanceName}</p>
-            </div>
-            <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl">
-              <button
-                onClick={onToggleAgent}
-                className={cn(
-                  'p-2.5 rounded-xl transition-all',
-                  agentEnabled
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                    : 'text-slate-400 hover:text-slate-600'
-                )}
-              >
-                {agentEnabled ? <Bot size={18} /> : <BotOff size={18} />}
-              </button>
-              <button onClick={onEdit} className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
-                <Edit2 size={18} />
-              </button>
-              <button disabled={deleting} onClick={deleteInstance} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                {deleting ? <RefreshCcw size={18} className="animate-spin" /> : <Trash2 size={18} />}
-              </button>
-            </div>
+    <div className="bg-white border border-slate-200 rounded overflow-hidden flex flex-col md:flex-row">
+      {/* Left: info */}
+      <div className="flex-1 p-6 flex flex-col gap-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">{instance.name}</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              {instance.instanceName}
+            </p>
           </div>
+          <div className="flex gap-1 bg-slate-50 p-1 rounded border border-slate-100">
+            <button
+              onClick={onToggleAgent}
+              title={agentEnabled ? 'Desativar agente' : 'Ativar agente'}
+              className={cn(
+                'p-2 rounded transition-all',
+                agentEnabled ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700'
+              )}
+            >
+              {agentEnabled ? <Bot size={16} /> : <BotOff size={16} />}
+            </button>
+            <button onClick={onEdit} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all">
+              <Edit2 size={16} />
+            </button>
+            <button disabled={deleting} onClick={deleteInstance} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-all">
+              {deleting ? <RefreshCcw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            </button>
+          </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <Link size={12} className="text-emerald-500" />
-                {linkedProf ? linkedProf.name : 'Atendimento Geral'}
-             </div>
-             <div className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border",
-                status === 'open' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
-             )}>
-                <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", status === 'open' ? "bg-emerald-500" : "bg-amber-500")} />
-                {status === 'open' ? 'Online' : 'Conectando'}
-             </div>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            <Link size={11} className="text-emerald-500" />
+            {linkedProf ? linkedProf.name : 'Atendimento Geral'}
+          </span>
+          <span className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest border',
+            status === 'open'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+              : 'bg-amber-50 text-amber-700 border-amber-100'
+          )}>
+            <span className={cn('w-1.5 h-1.5 rounded-full', status === 'open' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500')} />
+            {status === 'open' ? 'Online' : 'Desconectado'}
+          </span>
+        </div>
 
-          <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100/50">
-             <div className="flex items-center gap-2 mb-3">
-                <Sparkles size={14} className="text-emerald-500" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personalidade da IA</span>
-             </div>
-             <p className="text-sm text-slate-600 font-bold italic leading-relaxed line-clamp-3">"{instance.prompt}"</p>
+        <div className="bg-slate-50 rounded p-4 border border-slate-100">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles size={12} className="text-emerald-500" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personalidade</span>
           </div>
+          <p className="text-sm text-slate-600 italic leading-relaxed line-clamp-2">"{instance.prompt}"</p>
         </div>
       </div>
 
-      <div className="w-full md:w-96 bg-slate-50/50 border-t md:border-t-0 md:border-l border-slate-100 p-10 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-slate-50/30">
+      {/* Right: connection */}
+      <div className="w-full md:w-72 bg-slate-50 border-t md:border-t-0 md:border-l border-slate-200 p-6 flex flex-col items-center justify-center gap-4">
         {status === 'open' ? (
-          <div className="text-center space-y-6">
-            <div className="w-24 h-24 bg-emerald-500 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-emerald-100 animate-pulse">
-              <Bot size={42} />
+          <>
+            <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-sm">
+              <Bot size={28} />
             </div>
-            <div>
-              <h4 className="font-bold text-slate-900 text-xl tracking-tight">Ativo no WhatsApp</h4>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Sincronizado com Evolution API</p>
+            <div className="text-center">
+              <p className="font-bold text-slate-900">Ativo no WhatsApp</p>
+              <p className="text-xs text-slate-500 mt-0.5">Evolution API conectada</p>
             </div>
-            <button onClick={checkStatus} disabled={loading} className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto shadow-sm">
-               <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} />
-               Verificar Status
+            <button onClick={checkStatus} disabled={loading} className="px-4 py-2 bg-white border border-slate-200 rounded text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
+              <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} />
+              Verificar Status
             </button>
-          </div>
+          </>
         ) : qrCode ? (
-          <div className="text-center w-full space-y-8">
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xl mx-auto w-56 h-56 relative overflow-hidden group">
-               <img src={qrCode} alt="WhatsApp QR" className="w-full h-full" />
-               <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-[9px] font-bold">ESCANEIE AGORA</div>
-               </div>
+          <>
+            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm w-48 h-48">
+              <img src={qrCode} alt="WhatsApp QR" className="w-full h-full" />
             </div>
-            <div className="space-y-4">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Escaneie o código com seu WhatsApp</p>
-              <button onClick={checkStatus} disabled={loading} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 active:scale-95">
-                <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
-                Confirmar Conexão
-              </button>
-            </div>
-          </div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center">
+              Escaneie com seu WhatsApp
+            </p>
+            <button onClick={checkStatus} disabled={loading} className="w-full py-2.5 bg-emerald-600 text-white rounded font-bold shadow-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 active:scale-95">
+              <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
+              Confirmar Conexão
+            </button>
+          </>
         ) : (
-          <div className="text-center space-y-8">
-            <div className="w-24 h-24 bg-white border border-slate-100 rounded-[2rem] flex items-center justify-center mx-auto text-slate-200 shadow-xl">
-              <QrCode size={42} />
+          <>
+            <div className="w-16 h-16 bg-white border border-slate-200 rounded flex items-center justify-center text-slate-300 shadow-sm">
+              <QrCode size={28} />
             </div>
-            <div className="space-y-2">
-               <h4 className="font-bold text-slate-900 text-lg">Número Desconectado</h4>
-               <p className="text-xs text-slate-400 font-medium">Clique abaixo para vincular seu aparelho.</p>
+            <div className="text-center">
+              <p className="font-bold text-slate-900">Desconectado</p>
+              <p className="text-xs text-slate-500 mt-0.5">Clique para vincular o aparelho</p>
             </div>
-            <button onClick={createAndConnect} disabled={loading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-3">
-              {loading ? <RefreshCcw className="animate-spin" size={18} /> : <QrCode size={18} />}
+            <button onClick={createAndConnect} disabled={loading} className="w-full py-2.5 bg-slate-900 text-white rounded font-bold shadow-sm hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2">
+              {loading ? <RefreshCcw className="animate-spin" size={16} /> : <QrCode size={16} />}
               Vincular WhatsApp
             </button>
-          </div>
+          </>
         )}
       </div>
     </div>
   );
 }
 
-function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }: { clinicId: string, existing: WhatsAppInstance | null, professionals: Professional[], onClose: () => void, onSuccess: () => void }) {
+function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }: {
+  clinicId: string;
+  existing: WhatsAppInstance | null;
+  professionals: Professional[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const initialAgent: AgentConfig = { ...DEFAULT_AGENT_CONFIG, ...(existing?.agent ?? {}) };
 
   const [name, setName] = useState(existing?.name || '');
   const [professionalId, setProfessionalId] = useState(existing?.professionalId || '');
-  const [prompt, setPrompt] = useState(existing?.prompt || 'Você é o assistente virtual da clínica Cliny. Seja educado, use um tom profissional porém amigável. Ajude os pacientes a marcar consultas e tirar dúvidas básicas.');
+  const [prompt, setPrompt] = useState(
+    existing?.prompt ||
+      'Você é o assistente virtual da clínica. Seja educado, profissional e amigável. Ajude os pacientes a marcar consultas e tirar dúvidas básicas.'
+  );
   const [agent, setAgent] = useState<AgentConfig>(initialAgent);
   const [submitting, setSubmitting] = useState(false);
-  const [tab, setTab] = useState<'identity' | 'agent' | 'config'>('identity');
+  const [tab, setTab] = useState<'identity' | 'agent'>('identity');
 
   const updateAgent = (patch: Partial<AgentConfig>) => setAgent((c) => ({ ...c, ...patch }));
 
@@ -307,13 +306,7 @@ function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = {
-        name,
-        professionalId: professionalId || null,
-        prompt,
-        agent,
-      };
-
+      const data = { name, professionalId: professionalId || null, prompt, agent };
       if (existing) {
         await api.put(`/api/whatsapp/instances/${existing.id}`, data);
       } else {
@@ -329,46 +322,50 @@ function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative bg-white w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-[2.5rem] shadow-2xl flex flex-col"
+        exit={{ opacity: 0, scale: 0.97, y: 12 }}
+        className="relative bg-white w-full max-w-2xl max-h-[92vh] overflow-hidden rounded shadow-2xl flex flex-col"
       >
-        <div className="p-8 md:p-10 border-b border-slate-50 bg-white z-10 shrink-0">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
-                <Sparkles size={28} />
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded flex items-center justify-center">
+                <Sparkles size={20} />
               </div>
               <div>
-                <h3 className="text-2xl font-bold tracking-tight text-slate-900">
-                  {existing ? 'Configurações' : 'Novo Agente WhatsApp'}
+                <h3 className="text-lg font-bold text-slate-900">
+                  {existing ? 'Configurações da Instância' : 'Nova Instância WhatsApp'}
                 </h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                   Configuração da personalidade e comportamento
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Agente de IA para agendamento
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded-2xl transition-all">
-              <X size={24} className="text-slate-300" />
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded transition-all">
+              <X size={20} className="text-slate-400" />
             </button>
           </div>
 
-          <div className="flex gap-1.5 bg-slate-50 p-1.5 rounded-2xl">
-            {[
-              { id: 'identity', label: 'Identidade', icon: <Phone size={14} /> },
-              { id: 'agent', label: 'IA & Personalidade', icon: <Bot size={14} /> },
-              { id: 'config', label: 'Comunicação', icon: <MessageCircle size={14} /> },
-            ].map((t) => (
+          <div className="flex gap-1 bg-slate-100 p-1 rounded">
+            {([
+              { id: 'identity', label: 'Identidade', icon: <Phone size={13} /> },
+              { id: 'agent', label: 'Agente', icon: <Bot size={13} /> },
+            ] as const).map((t) => (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setTab(t.id as any)}
+                onClick={() => setTab(t.id)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all',
-                  tab === t.id ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-900'
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded text-xs font-bold transition-all',
+                  tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                 )}
               >
                 {t.icon}
@@ -378,105 +375,178 @@ function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-10 space-y-8 flex-1 overflow-y-auto no-scrollbar">
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 overflow-y-auto">
           {tab === 'identity' && (
-            <div className="space-y-10">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Identificador da Instância</label>
-                  <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-6 py-4.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 shadow-inner" placeholder="Ex: Recepção Dra. Maria" />
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nome da Instância</label>
+                  <input
+                    type="text" required value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Recepção Principal"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-semibold text-sm text-slate-900"
+                  />
                 </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Escopo de Atendimento</label>
-                  <select value={professionalId} onChange={(e) => setProfessionalId(e.target.value)} className="w-full px-6 py-4.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 appearance-none cursor-pointer shadow-inner">
-                    <option value="">Atendimento Geral (Toda Clínica)</option>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Profissional Vinculado</label>
+                  <select
+                    value={professionalId}
+                    onChange={(e) => setProfessionalId(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-semibold text-sm text-slate-900 cursor-pointer"
+                  >
+                    <option value="">Toda a Clínica</option>
                     {professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Personalidade Principal (System Prompt)</label>
-                <textarea required rows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} className="w-full p-6 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all text-sm font-bold text-slate-700 leading-relaxed resize-none shadow-inner" />
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Personalidade (System Prompt)
+                </label>
+                <textarea
+                  required rows={7}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all text-sm font-medium text-slate-700 leading-relaxed resize-none"
+                />
+                <p className="text-[10px] text-slate-400 font-medium">
+                  Defina a persona e o tom de voz do agente. Use um nome para o assistente e descreva como ele deve se comportar.
+                </p>
               </div>
             </div>
           )}
 
           {tab === 'agent' && (
-            <div className="space-y-8">
-              <div className="flex items-center justify-between p-6 bg-emerald-50/30 border border-emerald-100/30 rounded-3xl">
+            <div className="space-y-5">
+              {/* Enabled toggle */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded">
                 <div>
-                  <h4 className="font-bold text-slate-900">Agente Ativo</h4>
-                  <p className="text-xs text-slate-500 font-medium">Permitir que a IA responda mensagens automaticamente.</p>
+                  <p className="font-bold text-slate-900 text-sm">Agente Ativo</p>
+                  <p className="text-xs text-slate-500 mt-0.5">O agente responde mensagens automaticamente.</p>
                 </div>
-                <button type="button" onClick={() => updateAgent({ enabled: !agent.enabled })} className={cn('relative w-14 h-8 rounded-full transition-all shadow-inner', agent.enabled ? 'bg-emerald-500' : 'bg-slate-200')}>
-                  <span className={cn('absolute top-1.5 w-5 h-5 bg-white rounded-full shadow-lg transition-all', agent.enabled ? 'left-7.5' : 'left-1.5')} />
+                <button
+                  type="button"
+                  onClick={() => updateAgent({ enabled: !agent.enabled })}
+                  className={cn('relative w-12 h-6 rounded-full transition-all', agent.enabled ? 'bg-emerald-500' : 'bg-slate-300')}
+                >
+                  <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all', agent.enabled ? 'left-7' : 'left-1')} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Base de Conhecimento Especializada</label>
-                 <textarea rows={6} value={agent.knowledgeBase || ''} onChange={(e) => updateAgent({ knowledgeBase: e.target.value })} className="w-full p-6 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none font-bold text-sm text-slate-700 leading-relaxed resize-none shadow-inner" placeholder="Detalhes sobre localização, convênios, estacionamento, valores, etc." />
+              {/* Model + formality */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Modelo de IA</label>
+                  <select
+                    value={agent.model || 'gemini-2.5-flash'}
+                    onChange={(e) => updateAgent({ model: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded font-semibold text-sm text-slate-900 outline-none cursor-pointer"
+                  >
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tratamento</label>
+                  <select
+                    value={agent.formality || 'voce'}
+                    onChange={(e) => updateAgent({ formality: e.target.value as any })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded font-semibold text-sm text-slate-900 outline-none cursor-pointer"
+                  >
+                    <option value="voce">Você (informal)</option>
+                    <option value="senhor">Senhor/a (formal)</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Modelo de IA</label>
-                    <select value={agent.model || 'gemini-2.5-flash'} onChange={(e) => updateAgent({ model: e.target.value })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner">
-                       <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                       <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                    </select>
-                 </div>
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Assinatura</label>
-                    <input type="text" value={agent.signature || ''} onChange={(e) => updateAgent({ signature: e.target.value })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner" placeholder="Ex: — Assistente Cliny" />
-                 </div>
+              {/* Emoji + delay */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Emojis</label>
+                  <select
+                    value={agent.emojiUse || 'light'}
+                    onChange={(e) => updateAgent({ emojiUse: e.target.value as any })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded font-semibold text-sm text-slate-900 outline-none cursor-pointer"
+                  >
+                    <option value="never">Nunca</option>
+                    <option value="light">Leve (1 por resposta)</option>
+                    <option value="free">Livre</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    Delay de resposta
+                    <span className="ml-2 text-emerald-600 font-bold">{agent.responseDelayMax ?? 6}s</span>
+                  </label>
+                  <input
+                    type="range" min={1} max={30}
+                    value={agent.responseDelayMax ?? 6}
+                    onChange={(e) => updateAgent({ responseDelayMax: Number(e.target.value) })}
+                    className="w-full accent-emerald-500 mt-1"
+                  />
+                </div>
               </div>
-            </div>
-          )}
 
-          {tab === 'config' && (
-            <div className="space-y-8">
-               <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Tom de Voz</label>
-                    <select value={agent.formality || 'voce'} onChange={(e) => updateAgent({ formality: e.target.value as any })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner">
-                       <option value="voce">Informal (Você)</option>
-                       <option value="senhor">Formal (Senhor/a)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Uso de Emojis</label>
-                    <select value={agent.emojiUse || 'light'} onChange={(e) => updateAgent({ emojiUse: e.target.value as any })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner">
-                       <option value="never">Nunca</option>
-                       <option value="light">Leve</option>
-                       <option value="free">Livre</option>
-                    </select>
-                  </div>
-               </div>
-               
-               <div className="space-y-4">
-                  <div className="flex justify-between items-center px-1">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atraso na Resposta (segundos)</label>
-                     <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{agent.responseDelayMin}s - {agent.responseDelayMax}s</span>
-                  </div>
-                  <div className="flex items-center gap-6">
-                     <input type="range" min={0} max={30} value={agent.responseDelayMax} onChange={(e) => updateAgent({ responseDelayMax: Number(e.target.value), responseDelayMin: Math.min(agent.responseDelayMin!, Number(e.target.value) - 1) })} className="flex-1 accent-emerald-500" />
-                  </div>
-               </div>
+              {/* Signature */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Assinatura</label>
+                <input
+                  type="text"
+                  value={agent.signature || ''}
+                  onChange={(e) => updateAgent({ signature: e.target.value })}
+                  placeholder="Ex: — Assistente Cliny"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded font-semibold text-sm text-slate-900 outline-none"
+                />
+              </div>
 
-               <div className="space-y-4">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Mensagem de Transbordo (Indisponibilidade)</label>
-                  <input type="text" value={agent.fallbackMessage || ''} onChange={(e) => updateAgent({ fallbackMessage: e.target.value })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner" placeholder="Ex: No momento nossos atendentes estão ocupados..." />
-               </div>
+              {/* Knowledge base */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Base de Conhecimento
+                </label>
+                <textarea
+                  rows={4}
+                  value={agent.knowledgeBase || ''}
+                  onChange={(e) => updateAgent({ knowledgeBase: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded outline-none text-sm text-slate-700 leading-relaxed resize-none font-medium"
+                  placeholder="Endereço, convênios, valores, estacionamento, horário de funcionamento…"
+                />
+              </div>
+
+              {/* Fallback message */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Mensagem de Fallback
+                </label>
+                <input
+                  type="text"
+                  value={agent.fallbackMessage || ''}
+                  onChange={(e) => updateAgent({ fallbackMessage: e.target.value })}
+                  placeholder="Mensagem enviada quando o agente encontra erro"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded font-semibold text-sm text-slate-900 outline-none"
+                />
+              </div>
             </div>
           )}
         </form>
 
-        <div className="p-10 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0 rounded-t-[2rem]">
-          <button type="button" onClick={onClose} className="text-[11px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all">Cancelar</button>
-          <button onClick={handleSubmit} disabled={submitting} className="px-12 py-5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-[0.98] flex items-center gap-3">
-            {submitting ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Salvar Configurações'}
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+          <button type="button" onClick={onClose} className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-all px-3 py-2 rounded hover:bg-slate-200">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="px-8 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold rounded shadow-sm transition-all active:scale-[0.98] flex items-center gap-2 text-sm"
+          >
+            {submitting
+              ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              : <><MessageCircle size={15} /> Salvar</>
+            }
           </button>
         </div>
       </motion.div>

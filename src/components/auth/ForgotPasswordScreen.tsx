@@ -29,7 +29,7 @@ export function ForgotPasswordScreen({ onBack }: { onBack: () => void }) {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 md:p-12"
+        className="max-w-md w-full bg-white rounded shadow-xl p-8 md:p-12"
       >
         <button 
           onClick={onBack}
@@ -50,7 +50,7 @@ export function ForgotPasswordScreen({ onBack }: { onBack: () => void }) {
             </p>
             <button 
               onClick={onBack}
-              className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-[0.98]"
+              className="w-full bg-slate-900 text-white font-bold py-4 rounded shadow-lg transition-all active:scale-[0.98]"
             >
               Voltar para o login
             </button>
@@ -63,7 +63,7 @@ export function ForgotPasswordScreen({ onBack }: { onBack: () => void }) {
             </p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm font-medium">
+              <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded flex items-center gap-3 text-red-600 text-sm font-medium">
                 <AlertCircle size={18} />
                 {error}
               </div>
@@ -80,7 +80,7 @@ export function ForgotPasswordScreen({ onBack }: { onBack: () => void }) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com"
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-slate-900"
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-semibold text-slate-900"
                   />
                 </div>
               </div>
@@ -88,7 +88,7 @@ export function ForgotPasswordScreen({ onBack }: { onBack: () => void }) {
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

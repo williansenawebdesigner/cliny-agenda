@@ -201,7 +201,7 @@ function MainLayout() {
     <div className="flex h-screen bg-white text-slate-900 font-sans selection:bg-emerald-100 selection:text-emerald-900 overflow-hidden">
       <aside className="hidden md:flex w-64 border-r border-slate-50 flex-col py-8 px-6 shrink-0 h-full">
         <div className="flex items-center gap-3 px-2 mb-10">
-          <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center text-white shadow-sm">
+          <div className="w-9 h-9 bg-emerald-500 rounded flex items-center justify-center text-white shadow-sm">
             <Stethoscope size={20} strokeWidth={2.5} />
           </div>
           <span className="font-bold text-xl tracking-tight text-slate-900">Cliny.</span>
@@ -220,9 +220,9 @@ function MainLayout() {
         </nav>
 
         <footer className="pt-6 border-t border-slate-50 mt-auto space-y-2">
-          <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between group hover:bg-slate-100 transition-colors">
+          <div className="bg-slate-50 rounded p-3 flex items-center justify-between group hover:bg-slate-100 transition-colors">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-lg shrink-0 bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs">
+              <div className="w-8 h-8 rounded shrink-0 bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs">
                 {user?.email?.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -232,7 +232,7 @@ function MainLayout() {
             </div>
             <button
               onClick={logout}
-              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ml-2"
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-all ml-2"
             >
               <LogOut size={14} strokeWidth={2.5} />
             </button>
@@ -245,7 +245,7 @@ function MainLayout() {
           <header className="h-20 flex items-center justify-between px-6 md:px-12 shrink-0">
             <div className="flex items-center gap-4">
               <div className="md:hidden flex items-center gap-2 mr-4">
-                <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white">
+                <div className="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center text-white">
                   <Stethoscope size={18} />
                 </div>
                 <span className="font-bold text-base tracking-tight">Cliny.</span>
@@ -331,7 +331,7 @@ function ConnectionErrorScreen({
   return (
     <div className="flex items-center justify-center h-screen bg-slate-50 p-6">
       <div className="max-w-md text-center space-y-5">
-        <div className="w-14 h-14 mx-auto rounded-2xl bg-red-50 text-red-500 flex items-center justify-center">
+        <div className="w-14 h-14 mx-auto rounded bg-red-50 text-red-500 flex items-center justify-center">
           <Phone size={28} />
         </div>
         <div className="space-y-2">
@@ -340,7 +340,7 @@ function ConnectionErrorScreen({
         </div>
         <button
           onClick={onRetry}
-          className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 active:scale-95 transition-all"
+          className="px-5 py-2.5 rounded bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 active:scale-95 transition-all"
         >
           Tentar novamente
         </button>
@@ -367,7 +367,7 @@ function NavItem({
     <Link
       to={to}
       className={cn(
-        'flex items-center gap-4 w-full p-2.5 rounded-lg transition-all group',
+        'flex items-center gap-4 w-full p-2.5 rounded transition-all group',
         isActive ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
       )}
     >
@@ -386,7 +386,7 @@ function MobileNavItem({ to, icon, active }: { to: string; icon: ReactNode; acti
     <Link
       to={to}
       className={cn(
-        'flex items-center justify-center w-12 h-12 rounded-2xl transition-all',
+        'flex items-center justify-center w-12 h-12 rounded transition-all',
         active ? 'bg-emerald-50 text-emerald-600' : 'text-slate-300'
       )}
     >

@@ -199,7 +199,7 @@ export function ChatView({ clinicId }: { clinicId: string }) {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center bg-white rounded-3xl border border-slate-100">
+      <div className="h-full flex items-center justify-center bg-white rounded border border-slate-100">
          <div className="flex flex-col items-center gap-4">
             <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Carregando Conversas...</p>
@@ -209,13 +209,13 @@ export function ChatView({ clinicId }: { clinicId: string }) {
   }
 
   return (
-    <div className="h-[calc(100vh-160px)] flex bg-white border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-100/50">
+    <div className="h-[calc(100vh-160px)] flex bg-white border border-slate-100 rounded overflow-hidden shadow-2xl shadow-slate-100/50">
       {/* Sidebar */}
       <div className="w-96 border-r border-slate-50 flex flex-col bg-slate-50/30 shrink-0">
         <div className="p-8 border-b border-slate-50 bg-white space-y-6">
           <div className="flex items-center justify-between px-1">
              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Conversas</h3>
-             <button onClick={() => { fetchInstances(); fetchConversations(); }} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 transition-all">
+             <button onClick={() => { fetchInstances(); fetchConversations(); }} className="p-2 hover:bg-slate-50 rounded text-slate-400 transition-all">
                 <RefreshCcw size={16} />
              </button>
           </div>
@@ -223,7 +223,7 @@ export function ChatView({ clinicId }: { clinicId: string }) {
           <select
             value={selectedInstance?.id || ''}
             onChange={(e) => setSelectedInstance(instances.find((i) => i.id === e.target.value) || null)}
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 shadow-inner transition-all appearance-none cursor-pointer"
+            className="w-full bg-slate-50 border border-slate-100 rounded px-5 py-3.5 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 shadow-inner transition-all appearance-none cursor-pointer"
           >
             {instances.length === 0 && <option value="">Nenhuma conta ativa</option>}
             {instances.map((inst) => (
@@ -237,7 +237,7 @@ export function ChatView({ clinicId }: { clinicId: string }) {
             <button
               onClick={toggleAgentForInstance}
               className={cn(
-                'w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm',
+                'w-full flex items-center justify-between px-4 py-3 rounded text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm',
                 agentEnabledForInstance ? 'bg-emerald-500 text-white shadow-emerald-100' : 'bg-slate-100 text-slate-400'
               )}
             >
@@ -253,7 +253,7 @@ export function ChatView({ clinicId }: { clinicId: string }) {
         <div className="flex-1 overflow-y-auto no-scrollbar py-4">
           {conversations.length === 0 ? (
             <div className="p-12 text-center flex flex-col items-center">
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
+              <div className="w-16 h-16 bg-white rounded flex items-center justify-center text-slate-200 mb-6 shadow-sm">
                  <MessageSquare size={24} />
               </div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest max-w-[200px] leading-relaxed">Nenhuma conversa ativa no momento.</p>
@@ -267,19 +267,19 @@ export function ChatView({ clinicId }: { clinicId: string }) {
                   key={conv.id}
                   onClick={() => setSelectedJid(conv.remoteJid)}
                   className={cn(
-                    'mx-4 my-1 p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-4 group',
+                    'mx-4 my-1 p-4 rounded cursor-pointer transition-all flex items-center gap-4 group',
                     active ? 'bg-white shadow-xl shadow-slate-100 scale-[1.02]' : 'hover:bg-white/50'
                   )}
                 >
                   <div className="relative shrink-0">
                     <div className={cn(
-                      "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
+                      "w-12 h-12 rounded flex items-center justify-center transition-all",
                       active ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                     )}>
                       <User size={22} />
                     </div>
                     <div className={cn(
-                      'absolute -bottom-1 -right-1 w-5 h-5 rounded-lg border-2 border-white flex items-center justify-center shadow-sm transition-all',
+                      'absolute -bottom-1 -right-1 w-5 h-5 rounded border-2 border-white flex items-center justify-center shadow-sm transition-all',
                       convAgentEnabled ? 'bg-emerald-500' : 'bg-slate-300'
                     )}>
                       {convAgentEnabled ? <Bot size={10} className="text-white" /> : <BotOff size={10} className="text-white" />}
@@ -313,7 +313,7 @@ export function ChatView({ clinicId }: { clinicId: string }) {
           <>
             <div className="h-24 px-10 bg-white border-b border-slate-50 flex items-center justify-between shrink-0 z-10">
               <div className="flex items-center gap-5">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
+                <div className="w-12 h-12 rounded bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
                   <User size={24} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -331,7 +331,7 @@ export function ChatView({ clinicId }: { clinicId: string }) {
               <button
                 onClick={toggleAgentForConversation}
                 className={cn(
-                  'flex items-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm',
+                  'flex items-center gap-3 px-6 py-3 rounded text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm',
                   agentEnabledForConv ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                 )}
               >
@@ -395,18 +395,18 @@ export function ChatView({ clinicId }: { clinicId: string }) {
             </div>
 
             <div className="p-8 px-10 bg-white border-t border-slate-50 shrink-0">
-               <form onSubmit={handleSend} className="flex items-center gap-4 bg-slate-50 p-2 rounded-3xl border border-slate-100 shadow-inner">
+               <form onSubmit={handleSend} className="flex items-center gap-4 bg-slate-50 p-2 rounded border border-slate-100 shadow-inner">
                  <input
                    type="text"
                    value={inputText}
                    onChange={(e) => setInputText(e.target.value)}
                    placeholder={agentEnabledForConv ? 'Intervir na conversa...' : 'Digite sua mensagem...'}
-                   className="flex-1 bg-transparent border-none rounded-2xl px-6 py-3.5 outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300"
+                   className="flex-1 bg-transparent border-none rounded px-6 py-3.5 outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300"
                  />
                  <button
                    type="submit"
                    disabled={!inputText.trim()}
-                   className="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white rounded-2xl flex items-center justify-center transition-all shadow-xl shadow-emerald-100 active:scale-95 shrink-0"
+                   className="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white rounded flex items-center justify-center transition-all shadow-xl shadow-emerald-100 active:scale-95 shrink-0"
                  >
                    <Send size={22} className="ml-1" />
                  </button>
@@ -451,11 +451,11 @@ function AudioPlayer({ base64, isFromMe }: { base64: string, isFromMe: boolean }
 
   return (
     <div className={cn(
-      "flex items-center gap-4 p-3 rounded-2xl mt-4 min-w-[240px] border",
+      "flex items-center gap-4 p-3 rounded mt-4 min-w-[240px] border",
       isFromMe ? "bg-white/10 border-white/10" : "bg-slate-50 border-slate-100"
     )}>
       <button onClick={toggle} className={cn(
-        "w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-sm",
+        "w-12 h-12 rounded flex items-center justify-center transition-all shadow-sm",
         isFromMe ? "bg-white text-slate-900" : "bg-emerald-500 text-white"
       )}>
         {playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
