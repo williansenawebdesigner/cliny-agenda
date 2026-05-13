@@ -1,12 +1,11 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Clock, Sparkles, MessageCircle, AlertTriangle, Wrench } from 'lucide-react';
+import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Clock, Sparkles, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { WhatsAppInstance, Professional, AgentConfig, DEFAULT_AGENT_CONFIG } from '../types';
 import { cn } from '../lib/utils';
 
 export function WhatsAppView({ clinicId }: { clinicId: string }) {
-  const [config, setConfig] = useState({ hasUrl: false, hasApiKey: false });
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,18 +14,8 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
   const [editingInstance, setEditingInstance] = useState<WhatsAppInstance | null>(null);
 
   useEffect(() => {
-    checkConfig();
     fetchData();
   }, []);
-
-  const checkConfig = async () => {
-    try {
-      const data = await api.get<any>('/api/evolution/config');
-      setConfig(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -65,28 +54,6 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
       console.error(e);
     }
   };
-
-  if (!config.hasUrl || !config.hasApiKey) {
-    return (
-      <div className="max-w-4xl space-y-8">
-        <header>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Agentes WhatsApp</h2>
-          <p className="text-slate-400 font-medium mt-1 text-sm uppercase tracking-widest">Configuração do Sistema</p>
-        </header>
-        <div className="p-10 bg-amber-50/50 border border-amber-100 rounded-3xl flex items-center gap-6">
-           <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-amber-500 shadow-sm">
-              <AlertTriangle size={32} />
-           </div>
-           <div>
-              <h3 className="text-amber-900 font-bold mb-1 text-lg">Variáveis de Ambiente Faltando</h3>
-              <p className="text-amber-700 text-sm font-medium leading-relaxed">
-                As variáveis da Evolution API (URL e Global API Key) não estão configuradas no ambiente Vercel/Local.
-              </p>
-           </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-10">

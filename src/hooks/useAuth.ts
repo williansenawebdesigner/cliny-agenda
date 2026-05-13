@@ -35,7 +35,7 @@ export function useAuth() {
   const fetchMe = useCallback(async (retries = 2): Promise<void> => {
     try {
       const data = await api.get<MeResponse>('/api/auth/me');
-      setState((s) => ({ ...s, clinic: data.clinic, error: null }));
+      setState((s) => ({ ...s, clinic: data.clinic, error: null, loading: false }));
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Sessão local existe mas o backend rejeitou — limpa tudo para voltar ao login.
@@ -54,15 +54,23 @@ export function useAuth() {
         err instanceof ApiError && err.status >= 500
           ? 'Não foi possível carregar seus dados. Verifique sua conexão.'
           : null;
-      setState((s) => ({ ...s, clinic: null, error: msg }));
+      setState((s) => ({ ...s, clinic: null, error: msg, loading: false }));
     }
   }, []);
 
   useEffect(() => {
     const applySession = (session: Session | null) => {
       const sid = session?.access_token ?? null;
-      setState((s) => ({ ...s, user: session?.user ?? null, session, loading: false }));
-      if (sid && lastFetchedSessionId.current !== sid) {
+      // Vai disparar fetchMe? Então mantém loading=true até ele resolver — evita
+      // flash de CreateClinicScreen no boot enquanto clinic ainda é null.
+      const willFetch = !!sid && lastFetchedSessionId.current !== sid;
+      setState((s) => ({
+        ...s,
+        user: session?.user ?? null,
+        session,
+        loading: willFetch ? true : false,
+      }));
+      if (willFetch) {
         lastFetchedSessionId.current = sid;
         fetchMe();
       } else if (!sid) {
