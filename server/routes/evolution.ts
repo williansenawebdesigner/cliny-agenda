@@ -45,8 +45,17 @@ evolutionRouter.post('/instance', requireAuth, async (req, res) => {
   const webhookUrl = `${getPublicUrl()}/api/evolution/webhook${
     webhookSecret ? `?secret=${encodeURIComponent(webhookSecret)}` : ''
   }`;
+
+  async function tryConnect() {
+    const r = await fetch(`${env!.url}/instance/connect/${instanceName}`, {
+      method: 'GET',
+      headers: { apikey: env!.apiKey },
+    });
+    return r;
+  }
+
   try {
-    const response = await fetch(`${env.url}/instance/create`, {
+    const createResp = await fetch(`${env.url}/instance/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: env.apiKey },
       body: JSON.stringify({
@@ -66,11 +75,35 @@ evolutionRouter.post('/instance', requireAuth, async (req, res) => {
         },
       }),
     });
-    const data = await response.json();
-    return res.status(response.ok ? 200 : response.status).json(data);
-  } catch (error) {
+
+    if (createResp.ok) {
+      const data = await createResp.json();
+      return res.status(200).json(data);
+    }
+
+    // Instância já existe na Evolution (403/409) — vai direto buscar o QR.
+    if (createResp.status === 403 || createResp.status === 409) {
+      const connectResp = await tryConnect();
+      if (connectResp.ok) {
+        const data = await connectResp.json();
+        return res.status(200).json(data);
+      }
+      const connectErr = await connectResp.text().catch(() => '');
+      console.warn('[evolution] connect after conflict failed', connectResp.status, connectErr);
+    }
+
+    // Erro real — propaga com mais contexto do que "Forbidden".
+    const errText = await createResp.text().catch(() => '');
+    let errBody: any = {};
+    try { errBody = JSON.parse(errText); } catch { errBody = { raw: errText }; }
+    console.warn('[evolution] create failed', createResp.status, errBody);
+    return res.status(createResp.status).json({
+      error: errBody?.message || errBody?.error || errBody?.response?.message?.[0] || `Evolution API ${createResp.status}`,
+      details: errBody,
+    });
+  } catch (error: any) {
     console.error('Error creating instance:', error);
-    return res.status(500).json({ error: 'Failed to create instance' });
+    return res.status(502).json({ error: 'Evolution API inacessível.', cause: error?.message });
   }
 });
 
