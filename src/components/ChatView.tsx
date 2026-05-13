@@ -1,18 +1,9 @@
-import { useState, useEffect, useRef, FormEvent, useMemo } from 'react';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  doc,
-  setDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { useState, useEffect, useRef, FormEvent, useMemo, useCallback } from 'react';
 import { WhatsAppInstance, WhatsAppConversation } from '../types';
-import { Send, Phone, User, Play, Pause, Bot, BotOff, Check, CheckCheck } from 'lucide-react';
+import { Send, User, Play, Pause, Bot, BotOff, Check, CheckCheck, RefreshCcw, MessageSquare } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../lib/api';
 
 interface RemoteMessage {
   id: string;
@@ -41,10 +32,6 @@ type ChatMessage =
   | (RemoteMessage & { pending?: false })
   | PendingMessage;
 
-function conversationDocId(instanceName: string, jid: string) {
-  return `${instanceName}__${jid}`;
-}
-
 export function ChatView({ clinicId }: { clinicId: string }) {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<WhatsAppInstance | null>(null);
@@ -53,94 +40,75 @@ export function ChatView({ clinicId }: { clinicId: string }) {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
   const [selectedJid, setSelectedJid] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load instances for the clinic
-  useEffect(() => {
-    const q = query(
-      collection(db, 'whatsapp_instances'),
-      where('clinicId', '==', clinicId)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const insts = snap.docs.map(
-        (d) => ({ id: d.id, ...d.data() } as WhatsAppInstance)
+  const fetchInstances = useCallback(async () => {
+    try {
+      const data = await api.get<{ instances: WhatsAppInstance[] }>('/api/whatsapp/instances');
+      setInstances(data.instances);
+      if (data.instances.length > 0 && !selectedInstance) {
+        setSelectedInstance(data.instances[0]);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [selectedInstance]);
+
+  const fetchConversations = useCallback(async () => {
+    if (!selectedInstance) return;
+    try {
+      const data = await api.get<{ conversations: WhatsAppConversation[] }>(`/api/whatsapp/conversations?instanceName=${selectedInstance.instanceName}`);
+      setConversations(data.conversations.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0)));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [selectedInstance]);
+
+  const fetchMessages = useCallback(async () => {
+    if (!selectedInstance || !selectedJid) return;
+    try {
+      const data = await api.get<{ messages: RemoteMessage[] }>(`/api/whatsapp/messages?instanceName=${selectedInstance.instanceName}&remoteJid=${selectedJid}`);
+      const msgs = data.messages.sort((a, b) => a.messageTimestamp - b.messageTimestamp);
+      setMessages(msgs);
+
+      // Reconcile pending
+      setPending((cur) =>
+        cur.filter((p) => {
+          const match = msgs.some(
+            (m) =>
+              m.fromMe &&
+              m.remoteJid === p.remoteJid &&
+              m.content === p.content &&
+              Math.abs(m.messageTimestamp - p.messageTimestamp) < 60
+          );
+          return !match;
+        })
       );
-      setInstances(insts);
-      setSelectedInstance((current) => {
-        if (current) {
-          return insts.find((i) => i.id === current.id) ?? insts[0] ?? null;
-        }
-        return insts[0] ?? null;
-      });
-    });
-    return unsub;
-  }, [clinicId]);
-
-  // Listen to messages for selected instance
-  useEffect(() => {
-    if (!selectedInstance) {
-      setMessages([]);
-      return;
+    } catch (e) {
+      console.error(e);
     }
-    const q = query(
-      collection(db, 'whatsapp_messages'),
-      where('clinicId', '==', clinicId),
-      where('instanceName', '==', selectedInstance.instanceName)
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const msgs = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as RemoteMessage))
-          .sort((a, b) => a.messageTimestamp - b.messageTimestamp);
-        setMessages(msgs);
+  }, [selectedInstance, selectedJid]);
 
-        // Reconcile pending: drop any pending whose content showed up as fromMe within 60s
-        setPending((cur) =>
-          cur.filter((p) => {
-            const match = msgs.some(
-              (m) =>
-                m.fromMe &&
-                m.remoteJid === p.remoteJid &&
-                m.content === p.content &&
-                Math.abs(m.messageTimestamp - p.messageTimestamp) < 60
-            );
-            return !match;
-          })
-        );
-      },
-      (error) => {
-        console.error('[ChatView] messages onSnapshot error', error);
-      }
-    );
-    return unsub;
-  }, [selectedInstance, clinicId]);
-
-  // Listen to conversations for selected instance
   useEffect(() => {
-    if (!selectedInstance) {
-      setConversations([]);
-      return;
+    fetchInstances().then(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (selectedInstance) {
+      fetchConversations();
+      const interval = setInterval(fetchConversations, 10000);
+      return () => clearInterval(interval);
     }
-    const q = query(
-      collection(db, 'whatsapp_conversations'),
-      where('clinicId', '==', clinicId),
-      where('instanceName', '==', selectedInstance.instanceName)
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const convs = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as WhatsAppConversation))
-          .sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
-        setConversations(convs);
-      },
-      (error) => {
-        console.error('[ChatView] conversations onSnapshot error', error);
-      }
-    );
-    return unsub;
-  }, [selectedInstance, clinicId]);
+  }, [selectedInstance, fetchConversations]);
+
+  useEffect(() => {
+    if (selectedInstance && selectedJid) {
+      fetchMessages();
+      const interval = setInterval(fetchMessages, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedInstance, selectedJid, fetchMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -179,21 +147,17 @@ export function ChatView({ clinicId }: { clinicId: string }) {
     setInputText('');
 
     try {
-      const res = await fetch('/api/evolution/message/sendText', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instanceName: selectedInstance.instanceName,
-          number: selectedJid.split('@')[0],
-          text,
-          clinicId,
-          source: 'user',
-        }),
+      await api.post('/api/evolution/message/sendText', {
+        instanceName: selectedInstance.instanceName,
+        number: selectedJid.split('@')[0],
+        text,
+        clinicId,
+        source: 'user',
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setPending((cur) =>
         cur.map((p) => (p.id === tempId ? { ...p, status: 'sent' } : p))
       );
+      fetchMessages();
     } catch (err) {
       console.error('[ChatView] send failed', err);
       setPending((cur) =>
@@ -205,61 +169,63 @@ export function ChatView({ clinicId }: { clinicId: string }) {
   const toggleAgentForConversation = async () => {
     if (!selectedInstance || !selectedJid) return;
     const newValue = !(currentConversation?.agentEnabled ?? selectedInstance.agent?.enabled ?? true);
-    const ref = doc(
-      db,
-      'whatsapp_conversations',
-      conversationDocId(selectedInstance.instanceName, selectedJid)
-    );
-    await setDoc(
-      ref,
-      {
-        clinicId,
+    try {
+      await api.put(`/api/whatsapp/conversations/status`, {
         instanceName: selectedInstance.instanceName,
         remoteJid: selectedJid,
-        agentEnabled: newValue,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+        agentEnabled: newValue
+      });
+      fetchConversations();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const toggleAgentForInstance = async () => {
     if (!selectedInstance) return;
     const cur = selectedInstance.agent?.enabled ?? true;
-    const ref = doc(db, 'whatsapp_instances', selectedInstance.id);
-    await setDoc(
-      ref,
-      {
-        agent: {
-          ...(selectedInstance.agent ?? {}),
-          enabled: !cur,
-        },
-      },
-      { merge: true }
-    );
+    try {
+      await api.put(`/api/whatsapp/instances/${selectedInstance.id}`, {
+        agent: { ...(selectedInstance.agent ?? {}), enabled: !cur }
+      });
+      fetchInstances();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const agentEnabledForConv =
-    currentConversation?.agentEnabled ?? selectedInstance?.agent?.enabled ?? true;
+  const agentEnabledForConv = currentConversation?.agentEnabled ?? selectedInstance?.agent?.enabled ?? true;
   const agentEnabledForInstance = selectedInstance?.agent?.enabled ?? true;
 
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-white rounded-3xl border border-slate-100">
+         <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Carregando Conversas...</p>
+         </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-[calc(100vh-140px)] flex bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="h-[calc(100vh-160px)] flex bg-white border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-100/50">
       {/* Sidebar */}
-      <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50/50 shrink-0">
-        <div className="p-3 border-b border-slate-200 bg-white space-y-2">
+      <div className="w-96 border-r border-slate-50 flex flex-col bg-slate-50/30 shrink-0">
+        <div className="p-8 border-b border-slate-50 bg-white space-y-6">
+          <div className="flex items-center justify-between px-1">
+             <h3 className="text-xl font-bold text-slate-900 tracking-tight">Conversas</h3>
+             <button onClick={() => { fetchInstances(); fetchConversations(); }} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 transition-all">
+                <RefreshCcw size={16} />
+             </button>
+          </div>
+
           <select
             value={selectedInstance?.id || ''}
-            onChange={(e) =>
-              setSelectedInstance(
-                instances.find((i) => i.id === e.target.value) || null
-              )
-            }
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500"
+            onChange={(e) => setSelectedInstance(instances.find((i) => i.id === e.target.value) || null)}
+            className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 shadow-inner transition-all appearance-none cursor-pointer"
           >
-            {instances.length === 0 && (
-              <option value="">Nenhuma instância conectada</option>
-            )}
+            {instances.length === 0 && <option value="">Nenhuma conta ativa</option>}
             {instances.map((inst) => (
               <option key={inst.id} value={inst.id}>
                 {inst.name}
@@ -271,73 +237,69 @@ export function ChatView({ clinicId }: { clinicId: string }) {
             <button
               onClick={toggleAgentForInstance}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors',
-                agentEnabledForInstance
-                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                'w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm',
+                agentEnabledForInstance ? 'bg-emerald-500 text-white shadow-emerald-100' : 'bg-slate-100 text-slate-400'
               )}
-              title="Pausar/retomar agente IA em todas as conversas desta instância"
             >
-              {agentEnabledForInstance ? <Bot size={14} /> : <BotOff size={14} />}
-              IA da instância: {agentEnabledForInstance ? 'Ativa' : 'Pausada'}
+              <div className="flex items-center gap-3">
+                 {agentEnabledForInstance ? <Bot size={16} /> : <BotOff size={16} />}
+                 IA GLOBAL: {agentEnabledForInstance ? 'ATIVA' : 'PAUSADA'}
+              </div>
+              <div className={cn("w-1.5 h-1.5 rounded-full", agentEnabledForInstance ? "bg-white animate-pulse" : "bg-slate-300")} />
             </button>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto no-scrollbar py-4">
           {conversations.length === 0 ? (
-            <div className="p-8 text-center text-sm font-medium text-slate-400">
-              Nenhuma conversa ainda. Envie uma mensagem para o número conectado.
+            <div className="p-12 text-center flex flex-col items-center">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
+                 <MessageSquare size={24} />
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest max-w-[200px] leading-relaxed">Nenhuma conversa ativa no momento.</p>
             </div>
           ) : (
             conversations.map((conv) => {
-              const convAgentEnabled =
-                conv.agentEnabled ?? selectedInstance?.agent?.enabled ?? true;
+              const convAgentEnabled = conv.agentEnabled ?? selectedInstance?.agent?.enabled ?? true;
+              const active = selectedJid === conv.remoteJid;
               return (
                 <div
                   key={conv.id}
                   onClick={() => setSelectedJid(conv.remoteJid)}
                   className={cn(
-                    'p-3 border-b border-slate-100 cursor-pointer transition-colors flex items-center gap-3',
-                    selectedJid === conv.remoteJid
-                      ? 'bg-emerald-50'
-                      : 'hover:bg-slate-50'
+                    'mx-4 my-1 p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-4 group',
+                    active ? 'bg-white shadow-xl shadow-slate-100 scale-[1.02]' : 'hover:bg-white/50'
                   )}
                 >
                   <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                      <User size={18} />
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
+                      active ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                    )}>
+                      <User size={22} />
                     </div>
-                    <div
-                      className={cn(
-                        'absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center',
-                        convAgentEnabled ? 'bg-emerald-500' : 'bg-slate-300'
-                      )}
-                      title={convAgentEnabled ? 'Agente IA ativo' : 'Agente IA pausado'}
-                    >
-                      {convAgentEnabled ? (
-                        <Bot size={9} className="text-white" />
-                      ) : (
-                        <BotOff size={9} className="text-white" />
-                      )}
+                    <div className={cn(
+                      'absolute -bottom-1 -right-1 w-5 h-5 rounded-lg border-2 border-white flex items-center justify-center shadow-sm transition-all',
+                      convAgentEnabled ? 'bg-emerald-500' : 'bg-slate-300'
+                    )}>
+                      {convAgentEnabled ? <Bot size={10} className="text-white" /> : <BotOff size={10} className="text-white" />}
                     </div>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-slate-900 truncate">
-                      {conv.contactName || `+${conv.remoteJid.split('@')[0]}`}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {conv.lastMessagePreview || '...'}
+                    <div className="flex items-center justify-between mb-0.5">
+                       <p className={cn("text-sm font-bold truncate tracking-tight", active ? "text-slate-900" : "text-slate-700")}>
+                         {conv.contactName || `+${conv.remoteJid.split('@')[0]}`}
+                       </p>
+                       {conv.lastMessageAt && (
+                         <span className="text-[9px] font-bold text-slate-400 shrink-0 uppercase tracking-tighter">
+                           {new Date(conv.lastMessageAt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                         </span>
+                       )}
+                    </div>
+                    <p className="text-xs text-slate-400 truncate font-medium">
+                      {conv.lastMessagePreview || 'Nenhuma mensagem...'}
                     </p>
                   </div>
-                  {conv.lastMessageAt && (
-                    <span className="text-[10px] font-medium text-slate-400 shrink-0">
-                      {new Date(conv.lastMessageAt * 1000).toLocaleTimeString(
-                        'pt-BR',
-                        { hour: '2-digit', minute: '2-digit' }
-                      )}
-                    </span>
-                  )}
                 </div>
               );
             })
@@ -346,42 +308,39 @@ export function ChatView({ clinicId }: { clinicId: string }) {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col bg-[#efeae2] min-w-0">
+      <div className="flex-1 flex flex-col bg-slate-50 min-w-0 relative">
         {selectedJid && selectedInstance ? (
           <>
-            <div className="h-16 px-6 bg-white border-b border-slate-200 flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                <User size={20} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-slate-900 truncate">
-                  {currentConversation?.contactName ||
-                    `+${selectedJid.split('@')[0]}`}
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  {agentEnabledForConv ? (
-                    <span className="text-emerald-600">Atendimento IA ativo</span>
-                  ) : (
-                    <span className="text-amber-600">Atendimento manual</span>
-                  )}
-                </p>
+            <div className="h-24 px-10 bg-white border-b border-slate-50 flex items-center justify-between shrink-0 z-10">
+              <div className="flex items-center gap-5">
+                <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
+                  <User size={24} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-slate-900 truncate text-lg tracking-tight">
+                    {currentConversation?.contactName || `+${selectedJid.split('@')[0]}`}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                     <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", agentEnabledForConv ? "bg-emerald-500" : "bg-amber-500")} />
+                     <p className={cn("text-[10px] font-bold uppercase tracking-widest", agentEnabledForConv ? "text-emerald-600" : "text-amber-600")}>
+                       {agentEnabledForConv ? 'IA Ativa neste chat' : 'Controle Manual'}
+                     </p>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={toggleAgentForConversation}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
-                  agentEnabledForConv
-                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  'flex items-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-sm',
+                  agentEnabledForConv ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                 )}
-                title="Pausar/retomar agente IA somente nesta conversa"
               >
                 {agentEnabledForConv ? <Bot size={16} /> : <BotOff size={16} />}
-                {agentEnabledForConv ? 'IA ativa' : 'IA pausada'}
+                {agentEnabledForConv ? 'Pausar IA' : 'Ativar IA'}
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-2">
+            <div className="flex-1 overflow-y-auto p-10 space-y-6 no-scrollbar">
               <AnimatePresence initial={false}>
                 {filteredMessages.map((msg) => {
                   const isPending = 'pending' in msg && msg.pending;
@@ -389,53 +348,43 @@ export function ChatView({ clinicId }: { clinicId: string }) {
                   return (
                     <motion.div
                       key={msg.id}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.12 }}
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
                       className={cn(
-                        'flex flex-col max-w-[70%]',
+                        'flex flex-col max-w-[80%]',
                         fromMe ? 'ml-auto items-end' : 'mr-auto items-start'
                       )}
                     >
                       <div
                         className={cn(
-                          'px-3 py-2 rounded-2xl shadow-sm text-[15px] break-words whitespace-pre-wrap',
+                          'px-6 py-4 rounded-[1.5rem] shadow-xl text-sm font-medium break-words whitespace-pre-wrap leading-relaxed',
                           fromMe
-                            ? 'bg-[#d9fdd3] rounded-tr-none text-slate-900'
-                            : 'bg-white rounded-tl-none text-slate-900',
-                          isPending && msg.status === 'failed' && 'bg-red-100'
+                            ? 'bg-slate-900 text-white rounded-tr-none'
+                            : 'bg-white text-slate-700 rounded-tl-none border border-slate-100',
+                          isPending && msg.status === 'failed' && 'bg-red-500 text-white'
                         )}
                       >
                         {msg.content}
                         {!isPending && (msg as RemoteMessage).audioBase64 && (
-                          <AudioPlayer base64={(msg as RemoteMessage).audioBase64!} />
+                          <AudioPlayer base64={(msg as RemoteMessage).audioBase64!} isFromMe={fromMe} />
                         )}
                       </div>
-                      <div className="flex items-center gap-1 px-1 mt-0.5">
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          {new Date(msg.messageTimestamp * 1000).toLocaleTimeString(
-                            'pt-BR',
-                            { hour: '2-digit', minute: '2-digit' }
-                          )}
+                      <div className="flex items-center gap-2 px-2 mt-2">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                          {new Date(msg.messageTimestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        {fromMe && isPending && msg.status === 'sending' && (
-                          <span className="text-[10px] text-slate-400">enviando…</span>
-                        )}
-                        {fromMe && isPending && msg.status === 'failed' && (
-                          <span className="text-[10px] text-red-500 font-bold">
-                            falhou — toque para reenviar
+                        {fromMe && isPending && (
+                          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">
+                            {msg.status === 'sending' ? 'Enviando...' : 'Enviado'}
                           </span>
-                        )}
-                        {fromMe && isPending && msg.status === 'sent' && (
-                          <Check size={12} className="text-slate-400" />
                         )}
                         {fromMe && !isPending && (
-                          <CheckCheck size={12} className="text-emerald-500" />
-                        )}
-                        {fromMe && !isPending && (msg as RemoteMessage).source === 'agent' && (
-                          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-                            <Bot size={10} /> IA
-                          </span>
+                           <div className="flex items-center gap-1.5">
+                              <CheckCheck size={12} className="text-emerald-500" />
+                              {(msg as RemoteMessage).source === 'agent' && (
+                                <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-1.5 py-0.5 rounded-md">AGENT IA</span>
+                              )}
+                           </div>
                         )}
                       </div>
                     </motion.div>
@@ -445,41 +394,33 @@ export function ChatView({ clinicId }: { clinicId: string }) {
               <div ref={messagesEndRef} />
             </div>
 
-            <form
-              onSubmit={handleSend}
-              className="p-4 bg-[#f0f2f5] flex items-center gap-3 shrink-0"
-            >
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={
-                  agentEnabledForConv
-                    ? 'Mensagem manual (a IA também responde)…'
-                    : 'Digite uma mensagem…'
-                }
-                className="flex-1 bg-white border-none rounded-xl px-5 py-3 outline-none text-sm shadow-sm"
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim()}
-                className="w-12 h-12 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white rounded-full flex items-center justify-center transition-colors shadow-sm active:scale-95"
-              >
-                <Send size={18} className="ml-1" />
-              </button>
-            </form>
+            <div className="p-8 px-10 bg-white border-t border-slate-50 shrink-0">
+               <form onSubmit={handleSend} className="flex items-center gap-4 bg-slate-50 p-2 rounded-3xl border border-slate-100 shadow-inner">
+                 <input
+                   type="text"
+                   value={inputText}
+                   onChange={(e) => setInputText(e.target.value)}
+                   placeholder={agentEnabledForConv ? 'Intervir na conversa...' : 'Digite sua mensagem...'}
+                   className="flex-1 bg-transparent border-none rounded-2xl px-6 py-3.5 outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300"
+                 />
+                 <button
+                   type="submit"
+                   disabled={!inputText.trim()}
+                   className="w-14 h-14 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white rounded-2xl flex items-center justify-center transition-all shadow-xl shadow-emerald-100 active:scale-95 shrink-0"
+                 >
+                   <Send size={22} className="ml-1" />
+                 </button>
+               </form>
+            </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[#f0f2f5]">
-            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-emerald-500 shadow-sm mb-6">
-              <Phone size={32} />
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-20 bg-slate-50/50">
+            <div className="w-32 h-32 bg-white rounded-[3rem] flex items-center justify-center text-slate-100 shadow-2xl shadow-slate-100 mb-10 border border-slate-50">
+              <MessageSquare size={48} />
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">
-              WhatsApp + IA
-            </h2>
-            <p className="text-slate-500 max-w-sm">
-              Selecione uma conversa ao lado. Você pode pausar a IA em conversas
-              específicas e responder manualmente.
+            <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Centro de Mensagens</h2>
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] max-w-sm leading-relaxed">
+              Selecione uma conversa ativa ao lado para gerenciar o atendimento ou intervir no agente de IA.
             </p>
           </div>
         )}
@@ -488,58 +429,48 @@ export function ChatView({ clinicId }: { clinicId: string }) {
   );
 }
 
-function AudioPlayer({ base64 }: { base64: string }) {
+function AudioPlayer({ base64, isFromMe }: { base64: string, isFromMe: boolean }) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!audioRef.current) {
-      const audioSrc = base64.startsWith('data:')
-        ? base64
-        : `data:audio/ogg;base64,${base64}`;
+      const audioSrc = base64.startsWith('data:') ? base64 : `data:audio/ogg;base64,${base64}`;
       audioRef.current = new Audio(audioSrc);
       audioRef.current.onended = () => setPlaying(false);
     }
-    return () => {
-      audioRef.current?.pause();
-    };
+    return () => { audioRef.current?.pause(); };
   }, [base64]);
 
   const toggle = () => {
     if (!audioRef.current) return;
-    if (playing) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
+    if (playing) audioRef.current.pause();
+    else audioRef.current.play();
     setPlaying(!playing);
   };
 
   return (
-    <div className="flex items-center gap-3 bg-slate-100/50 p-2 rounded-xl mt-2 min-w-[200px]">
-      <button
-        onClick={toggle}
-        className="w-10 h-10 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-700 transition-colors shrink-0"
-      >
-        {playing ? (
-          <Pause size={16} className="fill-current" />
-        ) : (
-          <Play size={16} className="fill-current ml-1" />
-        )}
+    <div className={cn(
+      "flex items-center gap-4 p-3 rounded-2xl mt-4 min-w-[240px] border",
+      isFromMe ? "bg-white/10 border-white/10" : "bg-slate-50 border-slate-100"
+    )}>
+      <button onClick={toggle} className={cn(
+        "w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-sm",
+        isFromMe ? "bg-white text-slate-900" : "bg-emerald-500 text-white"
+      )}>
+        {playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
       </button>
-      <div className="flex-1 h-1.5 bg-slate-300 rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-emerald-500 rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: playing ? '100%' : 0 }}
-          transition={{
-            duration: playing ? audioRef.current?.duration || 10 : 0.2,
-            ease: 'linear',
-          }}
-        />
+      <div className="flex-1 flex flex-col gap-2">
+         <div className="flex items-center gap-1">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className={cn(
+                "w-1 h-3 rounded-full transition-all",
+                playing ? "animate-pulse" : "opacity-30",
+                isFromMe ? "bg-white" : "bg-emerald-500"
+              )} style={{ animationDelay: `${i * 0.1}s`, height: `${Math.random() * 12 + 4}px` }} />
+            ))}
+         </div>
       </div>
     </div>
   );
 }
-
-const _serverTimestamp = serverTimestamp; // retain import side-effect (TS unused-import safety)

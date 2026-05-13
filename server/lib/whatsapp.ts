@@ -11,11 +11,7 @@ export async function sendPresence(
     await fetch(`${env.url}/chat/sendPresence/${instanceName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: env.apiKey },
-      body: JSON.stringify({
-        number: jid,
-        delay: delayMs ?? 1200,
-        presence,
-      }),
+      body: JSON.stringify({ number: jid, delay: delayMs ?? 1200, presence }),
     });
   } catch (err) {
     console.warn('[whatsapp] sendPresence failed', err);

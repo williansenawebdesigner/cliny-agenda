@@ -1,5 +1,4 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import {
   Plus,
   Trash2,
@@ -10,7 +9,7 @@ import {
   Users as UsersIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from '../lib/firebase';
+import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import {
   Professional,
@@ -35,9 +34,8 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'professionals'), where('clinicId', '==', clinicId));
-      const snapshot = await getDocs(q);
-      setProfessionals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Professional)));
+      const data = await api.get<{ professionals: Professional[] }>('/api/professionals');
+      setProfessionals(data.professionals);
     } catch (error) {
       console.error(error);
     } finally {
@@ -49,16 +47,26 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
     fetchData();
   }, [clinicId]);
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este profissional?')) return;
+    try {
+      await api.delete(`/api/professionals/${id}`);
+      fetchData();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <div className="space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Equipe & Serviços</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Equipe & Serviços</h1>
           <p className="text-slate-400 font-medium text-sm">Gerencie os profissionais e os serviços que cada um executa.</p>
         </div>
         <button 
           onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full md:w-auto md:px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-all font-semibold active:scale-95 shrink-0 text-sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full md:w-auto md:px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
         >
           <Plus size={18} />
           Novo Profissional
@@ -67,29 +75,30 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : professionals.length === 0 ? (
-        <div className="bg-slate-50/50 rounded-xl p-12 text-center flex flex-col items-center">
-          <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center text-slate-200 mb-6 shadow-sm">
+        <div className="bg-slate-50/50 rounded-2xl p-12 text-center flex flex-col items-center border border-dashed border-slate-100">
+          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
              <User size={28} />
           </div>
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">Sua equipe está vazia</h3>
-          <p className="text-sm text-slate-400 max-w-xs mb-8 leading-relaxed">Adicione os profissionais e seus respectivos serviços.</p>
+          <h3 className="text-lg font-bold text-slate-900 mb-2">Sua equipe está vazia</h3>
+          <p className="text-sm text-slate-400 max-w-xs mb-8 leading-relaxed font-medium">Adicione os profissionais e seus respectivos serviços.</p>
           <button 
             onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
-            className="bg-emerald-600 text-white px-8 py-3 rounded-lg font-semibold shadow-sm hover:bg-emerald-700 transition-all active:scale-95"
+            className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
           >
             Adicionar Profissional
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {professionals.map((prof: Professional) => (
             <ProfessionalCard 
               key={prof.id} 
               professional={prof} 
               onEdit={() => { setEditingProf(prof); setIsModalOpen(true); }}
+              onDelete={() => handleDelete(prof.id)}
             />
           ))}
         </div>
@@ -98,7 +107,6 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
       <AnimatePresence>
         {isModalOpen && (
           <ProfessionalModal 
-            clinicId={clinicId}
             existing={editingProf}
             onClose={() => { setIsModalOpen(false); setEditingProf(null); }} 
             onSuccess={() => {
@@ -113,45 +121,44 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
   );
 }
 
-function ProfessionalCard({ professional, onEdit }: { professional: Professional, onEdit: () => void, key?: any }) {
-  const linkedProcs = professional.services || [];
+function ProfessionalCard({ professional, onEdit, onDelete }: { professional: Professional, onEdit: () => void, onDelete: () => void }) {
+  const services = professional.services || [];
 
   return (
-    <div className="bg-white p-6 rounded-xl hover:bg-slate-50 transition-all group relative border border-transparent hover:border-slate-50 h-full flex flex-col justify-between">
+    <div className="bg-white p-6 rounded-2xl hover:border-emerald-100 border border-slate-50 transition-all group relative flex flex-col justify-between shadow-sm shadow-slate-100/50">
       <div>
-        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-lg flex items-center justify-center mb-6 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
+        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-xl flex items-center justify-center mb-6 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-inner">
           <User size={24} />
         </div>
-        <h4 className="font-semibold text-slate-900 text-base leading-tight group-hover:text-emerald-700 transition-colors tracking-tight">{professional.name}</h4>
-        <p className="text-[10px] text-slate-400 font-semibold mt-2">{professional.specialty || 'Sem especialidade'}</p>
-        <p className="text-[10px] text-slate-300 font-medium mt-1 truncate">{professional.email}</p>
+        <h4 className="font-bold text-slate-900 text-base leading-tight group-hover:text-emerald-700 transition-colors tracking-tight">{professional.name}</h4>
+        <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-widest">{professional.specialty || 'Clínico Geral'}</p>
         
-        {linkedProcs.length > 0 && (
-          <div className="mt-4 space-y-1">
-             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Serviços ({linkedProcs.length})</p>
-             <div className="flex flex-wrap gap-1">
-               {linkedProcs.slice(0, 3).map(p => (
-                 <span key={p.id} className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded leading-none">
-                   {p.name} • {p.duration}min
+        {services.length > 0 && (
+          <div className="mt-4 space-y-2">
+             <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Serviços ({services.length})</p>
+             <div className="flex flex-wrap gap-1.5">
+               {services.slice(0, 3).map(p => (
+                 <span key={p.id} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded-lg leading-none font-bold border border-slate-100/50">
+                   {p.name}
                  </span>
                ))}
-               {linkedProcs.length > 3 && <span className="text-[9px] text-slate-300 px-1.5 py-0.5">+ {linkedProcs.length - 3}</span>}
+               {services.length > 3 && <span className="text-[10px] text-slate-300 font-bold px-1.5 py-1">+ {services.length - 3}</span>}
              </div>
           </div>
         )}
       </div>
       
-      <div className="mt-6 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[10px]">
-           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-           <span className="font-semibold text-slate-400">Ativo na clínica</span>
+      <div className="mt-8 flex items-center justify-between border-t border-slate-50 pt-4">
+        <div className="flex items-center gap-1.5 text-[10px] bg-emerald-50 px-2 py-1 rounded-lg">
+           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+           <span className="font-bold text-emerald-600">Ativo</span>
         </div>
-        <div className="flex gap-2">
-           <button onClick={onEdit} className="w-8 h-8 rounded flex items-center justify-center text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all opacity-0 group-hover:opacity-100">
-             <Edit2 size={16} />
+        <div className="flex gap-1">
+           <button onClick={onEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all">
+             <Edit2 size={14} />
            </button>
-           <button className="w-8 h-8 rounded flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
-             <Trash2 size={16} />
+           <button onClick={onDelete} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+             <Trash2 size={14} />
            </button>
         </div>
       </div>
@@ -159,7 +166,7 @@ function ProfessionalCard({ professional, onEdit }: { professional: Professional
   );
 }
 
-function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicId: string, existing: Professional | null, onClose: () => void, onSuccess: () => void }) {
+function ProfessionalModal({ existing, onClose, onSuccess }: { existing: Professional | null, onClose: () => void, onSuccess: () => void }) {
   const [name, setName] = useState(existing?.name || '');
   const [email, setEmail] = useState(existing?.email || '');
   const [specialty, setSpecialty] = useState(existing?.specialty || '');
@@ -238,23 +245,18 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
     setSubmitting(true);
     try {
       const data: any = {
-        clinicId,
         name,
         email,
         specialty,
         services,
         bookingMode,
         walkInPeriods: bookingMode === 'walk_in' ? walkInPeriods : null,
-        updatedAt: new Date().toISOString(),
       };
 
       if (existing) {
-        await updateDoc(doc(db, 'professionals', existing.id), data);
+        await api.put(`/api/professionals/${existing.id}`, data);
       } else {
-        await addDoc(collection(db, 'professionals'), {
-          ...data,
-          createdAt: new Date().toISOString(),
-        });
+        await api.post('/api/professionals', data);
       }
       onSuccess();
     } catch (error) {
@@ -271,29 +273,29 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-slate-900/10 backdrop-blur-md"
+        className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"
       />
       <motion.div
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl flex flex-col"
+        className="relative bg-white w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col"
       >
         <div className="p-8 border-b border-slate-50 sticky top-0 bg-white z-10 shrink-0">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex flex-col gap-1">
-              <h3 className="text-xl font-semibold tracking-tight text-slate-900">{existing ? 'Editar Profissional' : 'Novo Profissional'}</h3>
-              <p className="text-[10px] text-slate-400 font-medium">Cadastre os dados, serviços e modo de atendimento.</p>
+              <h3 className="text-2xl font-bold tracking-tight text-slate-900">{existing ? 'Editar Profissional' : 'Novo Profissional'}</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Identidade, serviços e modo de atendimento.</p>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
               <X size={20} className="text-slate-300" />
             </button>
           </div>
-          <div className="flex gap-1 bg-slate-50 p-1 rounded-xl">
+          <div className="flex gap-1 bg-slate-50 p-1 rounded-2xl">
             {(
               [
-                ['identity', 'Identidade & Serviços', <User size={14} key="i" />],
-                ['booking', 'Modo de Atendimento', <Clock size={14} key="b" />],
+                ['identity', 'Dados & Serviços', <User size={14} key="i" />],
+                ['booking', 'Configuração de Agenda', <Clock size={14} key="b" />],
               ] as const
             ).map(([key, label, icon]) => (
               <button
@@ -301,8 +303,8 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
                 type="button"
                 onClick={() => setTab(key)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
-                  tab === key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all',
+                  tab === key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-900'
                 )}
               >
                 {icon}
@@ -312,228 +314,167 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8 flex-1">
+        <form onSubmit={handleSubmit} className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar">
         {tab === 'identity' && (
         <div className="space-y-8">
           <div className="grid grid-cols-2 gap-6">
              <div className="space-y-2 col-span-2">
-               <label className="text-[10px] font-semibold text-slate-400 ml-1">Nome Completo</label>
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
                <input 
                  type="text" 
                  required
                  value={name}
                  onChange={(e) => setName(e.target.value)}
-                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-lg outline-none transition-all font-semibold text-sm"
+                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm shadow-inner"
                />
              </div>
              <div className="space-y-2">
-               <label className="text-[10px] font-semibold text-slate-400 ml-1">Email</label>
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
                <input 
                  type="email" 
                  required
                  value={email}
                  onChange={(e) => setEmail(e.target.value)}
-                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-lg outline-none transition-all font-semibold text-sm"
+                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm shadow-inner"
                />
              </div>
              <div className="space-y-2">
-               <label className="text-[10px] font-semibold text-slate-400 ml-1">Especialidade</label>
+               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Especialidade</label>
                <input 
                  type="text" 
                  value={specialty}
                  onChange={(e) => setSpecialty(e.target.value)}
-                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-lg outline-none transition-all font-semibold text-sm"
+                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm shadow-inner"
+                 placeholder="Ex: Clínico Geral"
                />
              </div>
           </div>
 
           <div className="space-y-4">
              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-semibold text-slate-400 ml-1">Serviços ({services.length})</label>
-                <button type="button" onClick={addService} className="text-emerald-600 font-bold text-xs flex items-center gap-1 hover:underline">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Serviços ({services.length})</label>
+                <button type="button" onClick={addService} className="text-emerald-600 font-bold text-[10px] flex items-center gap-1 hover:underline uppercase tracking-widest">
                   <Plus size={14} /> Adicionar Serviço
                 </button>
              </div>
              
              <div className="flex flex-col gap-3">
                {services.map((svc) => (
-                  <div key={svc.id} className="flex gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div key={svc.id} className="flex gap-3 items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
                      <div className="flex-1">
                         <input 
                           type="text" 
                           placeholder="Nome do serviço" 
                           value={svc.name}
                           onChange={(e) => updateService(svc.id, 'name', e.target.value)}
-                          className="w-full bg-transparent outline-none font-semibold text-sm text-slate-900 placeholder:text-slate-300"
+                          className="w-full bg-transparent outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
                         />
                      </div>
-                     <div className="w-24">
+                     <div className="w-20">
                         <input 
                           type="number" 
-                          placeholder="Minutos" 
+                          placeholder="Min" 
                           value={svc.duration}
                           onChange={(e) => updateService(svc.id, 'duration', Number(e.target.value))}
-                          className="w-full bg-white px-2 py-1.5 rounded-md border border-slate-100 outline-none focus:border-emerald-500 font-semibold text-xs text-slate-700"
+                          className="w-full bg-white px-2 py-2 rounded-lg border border-slate-100 outline-none focus:border-emerald-500 font-bold text-xs text-slate-700"
                         />
                      </div>
-                     <div className="w-28 relative">
-                        <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-semibold border-r border-slate-100 pr-1.5">R$</span>
+                     <div className="w-24 relative">
                         <input 
                           type="number" 
                           placeholder="Preço" 
                           value={svc.price}
                           onChange={(e) => updateService(svc.id, 'price', Number(e.target.value))}
-                          className="w-full bg-white pl-9 pr-2 py-1.5 rounded-md border border-slate-100 outline-none focus:border-emerald-500 font-semibold text-xs text-slate-700"
+                          className="w-full bg-white px-2 py-2 rounded-lg border border-slate-100 outline-none focus:border-emerald-500 font-bold text-xs text-slate-700"
                         />
                      </div>
-                     <button type="button" onClick={() => removeService(svc.id)} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors">
-                        <Trash2 size={16} />
+                     <button type="button" onClick={() => removeService(svc.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors bg-white rounded-lg border border-slate-100">
+                        <Trash2 size={14} />
                      </button>
                   </div>
                ))}
                {services.length === 0 && (
-                 <div className="text-center py-6 text-sm font-medium text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                 <div className="text-center py-10 text-xs font-bold text-slate-300 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
                     Nenhum serviço cadastrado.
                  </div>
                )}
              </div>
           </div>
-
         </div>
         )}
 
         {tab === 'booking' && (
           <div className="space-y-8">
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-3">Como este profissional atende?</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => setBookingMode('slot')}
                   className={cn(
-                    'p-5 rounded-xl border-2 transition-all text-left',
-                    bookingMode === 'slot' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-slate-200'
+                    'p-6 rounded-2xl border-2 transition-all text-left group',
+                    bookingMode === 'slot' ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-50 hover:border-slate-100 bg-slate-50/30'
                   )}
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', bookingMode === 'slot' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>
-                      <Clock size={20} />
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-all', bookingMode === 'slot' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-300')}>
+                      <Clock size={24} />
                     </div>
-                    <h4 className="font-bold text-slate-900">Hora marcada</h4>
+                    <h4 className="font-bold text-slate-900">Hora Marcada</h4>
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Cada paciente tem um horário específico (ex: 14h00, 14h30). A IA pergunta hora exata.
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    Agendamentos com horários fixos. A IA gerencia slots disponíveis.
                   </p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setBookingMode('walk_in')}
                   className={cn(
-                    'p-5 rounded-xl border-2 transition-all text-left',
-                    bookingMode === 'walk_in' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-slate-200'
+                    'p-6 rounded-2xl border-2 transition-all text-left group',
+                    bookingMode === 'walk_in' ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-50 hover:border-slate-100 bg-slate-50/30'
                   )}
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', bookingMode === 'walk_in' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400')}>
-                      <UsersIcon size={20} />
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center transition-all', bookingMode === 'walk_in' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-300')}>
+                      <UsersIcon size={24} />
                     </div>
-                    <h4 className="font-bold text-slate-900">Ordem de chegada</h4>
+                    <h4 className="font-bold text-slate-900">Ordem de Chegada</h4>
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Pacientes escolhem o período (Manhã/Tarde). A IA pergunta só o turno e reforça que é por ordem de chegada.
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    Pacientes agendam períodos (Manhã/Tarde). Sem hora marcada fixa.
                   </p>
                 </button>
-              </div>
             </div>
 
             {bookingMode === 'walk_in' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Períodos por dia</p>
-                  <p className="text-[10px] text-slate-400">Capacidade = vagas/dia</p>
-                </div>
+              <div className="space-y-4">
                 {WEEKDAY_KEYS.map((dayKey) => {
                   const periods = walkInPeriods[dayKey] ?? [];
                   return (
-                    <div key={dayKey} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-bold text-sm text-slate-900">{WEEKDAY_LABELS_PT[dayKey]}</h4>
-                        <div className="flex items-center gap-2">
+                    <div key={dayKey} className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-bold text-sm text-slate-900 uppercase tracking-tight">{WEEKDAY_LABELS_PT[dayKey]}</h4>
+                        <div className="flex items-center gap-3">
                           {periods.length === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => fillDayWithDefaults(dayKey)}
-                              className="text-[10px] font-bold text-emerald-600 hover:underline"
-                            >
-                              + Manhã/Tarde padrão
+                            <button type="button" onClick={() => fillDayWithDefaults(dayKey)} className="text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg transition-all uppercase tracking-widest">
+                              + Adicionar Padrão
                             </button>
                           ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => addPeriod(dayKey)}
-                                className="text-[10px] font-bold text-emerald-600 hover:underline"
-                              >
-                                + Período
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => copyToAllWeekdays(dayKey)}
-                                className="text-[10px] font-bold text-slate-500 hover:underline"
-                              >
-                                Copiar p/ todos
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => clearDay(dayKey)}
-                                className="text-[10px] font-bold text-rose-500 hover:underline"
-                              >
-                                Limpar
-                              </button>
-                            </>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => addPeriod(dayKey)} className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Adicionar</button>
+                              <button type="button" onClick={() => copyToAllWeekdays(dayKey)} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Copiar Tudo</button>
+                              <button type="button" onClick={() => clearDay(dayKey)} className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Limpar</button>
+                            </div>
                           )}
                         </div>
                       </div>
-                      {periods.length === 0 ? (
-                        <p className="text-xs text-slate-300 italic">Não atende neste dia.</p>
-                      ) : (
+                      {periods.length > 0 && (
                         <div className="space-y-2">
                           {periods.map((p) => (
-                            <div key={p.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100">
-                              <input
-                                value={p.label}
-                                onChange={(e) => updatePeriod(dayKey, p.id, { label: e.target.value })}
-                                placeholder="Manhã"
-                                className="flex-1 min-w-0 px-2 py-1.5 bg-transparent outline-none font-semibold text-sm text-slate-900"
-                              />
-                              <input
-                                type="time"
-                                value={p.start}
-                                onChange={(e) => updatePeriod(dayKey, p.id, { start: e.target.value })}
-                                className="w-24 px-2 py-1.5 bg-slate-50 rounded-md outline-none text-xs font-semibold text-slate-700"
-                              />
-                              <span className="text-slate-300 text-xs">→</span>
-                              <input
-                                type="time"
-                                value={p.end}
-                                onChange={(e) => updatePeriod(dayKey, p.id, { end: e.target.value })}
-                                className="w-24 px-2 py-1.5 bg-slate-50 rounded-md outline-none text-xs font-semibold text-slate-700"
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                value={p.capacity}
-                                onChange={(e) => updatePeriod(dayKey, p.id, { capacity: Number(e.target.value) })}
-                                title="Capacidade"
-                                className="w-16 px-2 py-1.5 bg-slate-50 rounded-md outline-none text-xs font-semibold text-slate-700"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removePeriod(dayKey, p.id)}
-                                className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                            <div key={p.id} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                              <input value={p.label} onChange={(e) => updatePeriod(dayKey, p.id, { label: e.target.value })} placeholder="Período" className="flex-1 px-3 py-2 bg-transparent outline-none font-bold text-sm" />
+                              <input type="time" value={p.start} onChange={(e) => updatePeriod(dayKey, p.id, { start: e.target.value })} className="w-24 px-2 py-2 bg-slate-50 rounded-lg text-xs font-bold" />
+                              <input type="time" value={p.end} onChange={(e) => updatePeriod(dayKey, p.id, { end: e.target.value })} className="w-24 px-2 py-2 bg-slate-50 rounded-lg text-xs font-bold" />
+                              <input type="number" value={p.capacity} onChange={(e) => updatePeriod(dayKey, p.id, { capacity: Number(e.target.value) })} className="w-16 px-2 py-2 bg-slate-50 rounded-lg text-xs font-bold text-center" />
+                              <button type="button" onClick={() => removePeriod(dayKey, p.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
                             </div>
                           ))}
                         </div>
@@ -546,15 +487,18 @@ function ProfessionalModal({ clinicId, existing, onClose, onSuccess }: { clinicI
           </div>
         )}
 
+        <div className="pt-4 pb-0">
           <button
             disabled={submitting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-300 text-white font-semibold py-4 rounded-lg shadow-sm transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
+            className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
           >
-            {submitting ? 'Salvando...' : 'Salvar Profissional'}
+            {submitting ? (
+               <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : 'Salvar Configurações'}
           </button>
+        </div>
         </form>
       </motion.div>
     </div>
   );
 }
-

@@ -1,19 +1,12 @@
-import type { VercelResponse } from '@vercel/node';
-
 export interface EvolutionEnv {
   url: string;
   apiKey: string;
 }
 
-export function getEvolutionEnv(res: VercelResponse): EvolutionEnv | null {
+export function getEvolutionEnv(): EvolutionEnv | null {
   const url = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_GLOBAL_API_KEY;
-
-  if (!url || !apiKey) {
-    res.status(400).json({ error: 'Evolution API credentials missing on server.' });
-    return null;
-  }
-
+  if (!url || !apiKey) return null;
   return { url, apiKey };
 }
 

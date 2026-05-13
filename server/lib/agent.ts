@@ -1,5 +1,5 @@
 import { GoogleGenAI, type Content, type Part, type FunctionDeclaration } from '@google/genai';
-import type { Firestore } from 'firebase-admin/firestore';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { executeTool, toolDeclarations, type ToolContext } from './agentTools.js';
 import { DEFAULT_TIMEZONE, humanInTz, hmInTz, ymdInTz, dayOfWeekInTz } from './tz.js';
 
@@ -278,26 +278,24 @@ export function isWithinWorkingHours(
 }
 
 export async function loadRecentHistory(
-  db: Firestore,
+  db: SupabaseClient,
   instanceName: string,
   remoteJid: string,
   limit = 20
 ): Promise<ConversationTurn[]> {
-  const snap = await db
-    .collection('whatsapp_messages')
-    .where('instanceName', '==', instanceName)
-    .where('remoteJid', '==', remoteJid)
-    .orderBy('messageTimestamp', 'desc')
-    .limit(limit)
-    .get()
-    .catch(() => null);
-  if (!snap || snap.empty) return [];
-  return snap.docs
-    .map((d) => d.data())
+  const { data } = await db
+    .from('whatsapp_messages')
+    .select('from_me, content, message_timestamp')
+    .eq('instance_name', instanceName)
+    .eq('remote_jid', remoteJid)
+    .order('message_timestamp', { ascending: false })
+    .limit(limit);
+  if (!data || data.length === 0) return [];
+  return data
     .reverse()
     .filter((m: any) => typeof m.content === 'string' && m.content.length > 0)
     .map((m: any): ConversationTurn => ({
-      role: m.fromMe ? 'assistant' : 'user',
+      role: m.from_me ? 'assistant' : 'user',
       content: m.content,
     }));
 }

@@ -3,7 +3,7 @@
 Gestão de clínica com agendamentos e atendimento por agente de IA no WhatsApp
 (via [Evolution API](https://github.com/EvolutionAPI/evolution-api)).
 
-Stack: **React 19 + Vite + Tailwind v4** no front, **Firebase (Auth + Firestore)**
+Stack: **React 19 + Vite + Tailwind v4** no front, **Supabase (Auth + PostgreSQL)**
 para dados, **Vercel Serverless Functions** (`/api/**`) para a integração com
 Evolution API e **Gemini** para o agente de IA.
 
@@ -46,19 +46,21 @@ Veja [`.env.example`](./.env.example). Resumo:
 
 | Variável | Onde | Notas |
 |---|---|---|
-| `VITE_FIREBASE_*` | Browser (build) | Config pública do Firebase Web App |
-| `FIREBASE_*` | Servidor (runtime) | Mesmos valores; usadas pelas funções `/api/**` |
+| `VITE_SUPABASE_URL` | Browser (build) | URL pública do Supabase |
+| `VITE_SUPABASE_ANON_KEY` | Browser (build) | Anon Key pública do Supabase |
+| `SUPABASE_URL` | Servidor (runtime) | Mesma URL; usada pelas funções `/api/**` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Servidor (runtime) | Chave Admin para bypass de RLS. *Sensitive* |
 | `GEMINI_API_KEY` | Servidor | Pode ser *Sensitive* |
 | `EVOLUTION_API_URL` | Servidor | URL da sua instância Evolution |
 | `EVOLUTION_GLOBAL_API_KEY` | Servidor | API key global da Evolution. *Sensitive* |
-| `EVOLUTION_WEBHOOK_SECRET` | Servidor | Segredo gerado por você (`openssl rand -hex 32`). *Sensitive* |
+| `EVOLUTION_WEBHOOK_SECRET` | Servidor | Segredo gerado por você. *Sensitive* |
 | `PUBLIC_URL` | Servidor | Opcional. Em produção a Vercel preenche `VERCEL_URL` |
 
 ## 4. Estrutura
 
 ```
 api/                       Vercel Serverless Functions
-  _lib/                    Helpers compartilhados (firebase, evolution)
+  _lib/                    Helpers compartilhados (supabase, agent, evolution)
   evolution/
     config.ts              GET — status das envs
     instance.ts            POST — cria instância Evolution
@@ -68,9 +70,9 @@ api/                       Vercel Serverless Functions
     message/sendText.ts    POST — envia texto
     webhook.ts             POST — recebe mensagens (auth por secret)
 src/                       Front-end (React SPA)
-  lib/firebase.ts          Cliente Firebase (lê VITE_FIREBASE_*)
+  lib/supabase.ts          Cliente Supabase (lê VITE_SUPABASE_*)
+  hooks/useAuth.ts         Hook de autenticação integrada
   components/              Telas (Agenda, Pacientes, WhatsApp, etc.)
-firestore.rules            Regras de segurança do Firestore
 vercel.json                Build SPA + rewrites
 ```
 
@@ -83,6 +85,5 @@ na Evolution o webhook:
 {PUBLIC_URL ou VERCEL_URL}/api/evolution/webhook?secret={EVOLUTION_WEBHOOK_SECRET}
 ```
 
-A função `/api/evolution/webhook` valida o `secret` (via query string ou
-header `x-webhook-secret`) antes de gravar a mensagem no Firestore. Defina
+A função `/api/evolution/webhook` valida o `secret` antes de gravar a mensagem no banco de dados. Defina
 `EVOLUTION_WEBHOOK_SECRET` em produção.

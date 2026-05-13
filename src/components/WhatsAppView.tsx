@@ -1,8 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { Bot, BotOff, QrCode, RefreshCcw, Plus, X, Phone, Trash2, Edit2, Link, Clock, Sparkles, MessageCircle, AlertTriangle, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from '../lib/firebase';
+import { api } from '../lib/api';
 import { WhatsAppInstance, Professional, AgentConfig, DEFAULT_AGENT_CONFIG } from '../types';
 import { cn } from '../lib/utils';
 
@@ -22,8 +21,7 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
 
   const checkConfig = async () => {
     try {
-      const res = await fetch('/api/evolution/config');
-      const data = await res.json();
+      const data = await api.get<any>('/api/evolution/config');
       setConfig(data);
     } catch (e) {
       console.error(e);
@@ -33,12 +31,12 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [instSnap, profSnap] = await Promise.all([
-        getDocs(query(collection(db, 'whatsapp_instances'), where('clinicId', '==', clinicId))),
-        getDocs(query(collection(db, 'professionals'), where('clinicId', '==', clinicId))),
+      const [instData, profData] = await Promise.all([
+        api.get<{ instances: WhatsAppInstance[] }>('/api/whatsapp/instances'),
+        api.get<{ professionals: Professional[] }>('/api/professionals'),
       ]);
-      setInstances(instSnap.docs.map((d) => ({ id: d.id, ...d.data() } as WhatsAppInstance)));
-      setProfessionals(profSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Professional)));
+      setInstances(instData.instances);
+      setProfessionals(profData.professionals);
     } catch (e) {
       console.error(e);
     } finally {
@@ -58,10 +56,14 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
 
   const toggleAgent = async (inst: WhatsAppInstance) => {
     const cur = inst.agent?.enabled ?? true;
-    await updateDoc(doc(db, 'whatsapp_instances', inst.id), {
-      agent: { ...(inst.agent ?? DEFAULT_AGENT_CONFIG), enabled: !cur },
-    });
-    fetchData();
+    try {
+      await api.put(`/api/whatsapp/instances/${inst.id}`, {
+        agent: { ...(inst.agent ?? DEFAULT_AGENT_CONFIG), enabled: !cur },
+      });
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   if (!config.hasUrl || !config.hasApiKey) {
@@ -69,11 +71,18 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
       <div className="max-w-4xl space-y-8">
         <header>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Agentes WhatsApp</h2>
-          <p className="text-slate-500 font-medium mt-1 text-sm">Conecte seu WhatsApp e configure assistentes de IA.</p>
+          <p className="text-slate-400 font-medium mt-1 text-sm uppercase tracking-widest">Configuração do Sistema</p>
         </header>
-        <div className="p-8 bg-amber-50 border border-amber-100 rounded-2xl">
-          <h3 className="text-amber-800 font-bold mb-2">Configuração Ausente</h3>
-          <p className="text-amber-700 text-sm">As variáveis de ambiente da Evolution API não estão configuradas no servidor (EVOLUTION_API_URL, EVOLUTION_GLOBAL_API_KEY).</p>
+        <div className="p-10 bg-amber-50/50 border border-amber-100 rounded-3xl flex items-center gap-6">
+           <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-amber-500 shadow-sm">
+              <AlertTriangle size={32} />
+           </div>
+           <div>
+              <h3 className="text-amber-900 font-bold mb-1 text-lg">Variáveis de Ambiente Faltando</h3>
+              <p className="text-amber-700 text-sm font-medium leading-relaxed">
+                As variáveis da Evolution API (URL e Global API Key) não estão configuradas no ambiente Vercel/Local.
+              </p>
+           </div>
         </div>
       </div>
     );
@@ -83,42 +92,40 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
     <div className="space-y-10">
       <div className="flex flex-col md:flex-row justify-between gap-6 md:items-end">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Agentes WhatsApp</h2>
-          <p className="text-slate-500 font-medium mt-1 text-sm">
-            Conecte vários números de WhatsApp e configure agentes IA personalizados por clínica ou profissional.
-          </p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Conexões WhatsApp</h2>
+          <p className="text-slate-400 font-medium mt-1 text-sm uppercase tracking-widest">Gestão de instâncias e IA</p>
         </div>
         <button
           onClick={openNewModal}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-all font-semibold active:scale-95 shrink-0 text-sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
         >
-          <Plus size={18} />
-          <span>Nova Instância</span>
+          <Plus size={20} />
+          <span>Conectar Número</span>
         </button>
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-12">
-          <RefreshCcw className="animate-spin text-slate-300" />
+        <div className="flex justify-center p-20">
+          <RefreshCcw className="animate-spin text-emerald-500 w-10 h-10" />
         </div>
       ) : instances.length === 0 ? (
-        <div className="bg-slate-50/50 rounded-xl p-12 text-center flex flex-col items-center">
-          <div className="w-16 h-16 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
-            <Phone size={28} />
+        <div className="bg-slate-50/50 rounded-3xl p-20 text-center flex flex-col items-center border border-dashed border-slate-100">
+          <div className="w-20 h-20 bg-white border border-slate-50 rounded-3xl flex items-center justify-center text-slate-200 mb-8 shadow-sm">
+            <Phone size={36} />
           </div>
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">Nenhum WhatsApp Conectado</h3>
-          <p className="text-sm text-slate-400 max-w-sm mb-8 leading-relaxed">
-            Crie uma instância para conectar um número de WhatsApp e habilitar o atendimento com IA.
+          <h3 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">Nenhuma instância encontrada</h3>
+          <p className="text-sm text-slate-400 max-w-sm mb-10 leading-relaxed font-medium">
+            Conecte seu WhatsApp para que o Cliny possa realizar agendamentos automáticos e atender seus pacientes.
           </p>
           <button
             onClick={openNewModal}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-semibold shadow-sm transition-all active:scale-95"
+            className="bg-slate-900 hover:bg-slate-800 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 transition-all active:scale-95"
           >
-            Conectar Número
+            Começar agora
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-8">
           {instances.map((inst) => (
             <InstanceCard
               key={inst.id}
@@ -150,27 +157,11 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
   );
 }
 
-interface InstanceCardProps {
-  instance: WhatsAppInstance;
-  professionals: Professional[];
-  onEdit: () => void;
-  onToggleAgent: () => void | Promise<void>;
-  onRefresh: () => void | Promise<void>;
-  key?: any;
-}
-
-function InstanceCard({
-  instance,
-  professionals,
-  onEdit,
-  onToggleAgent,
-  onRefresh,
-}: InstanceCardProps) {
+function InstanceCard({ instance, professionals, onEdit, onToggleAgent, onRefresh }: { instance: WhatsAppInstance, professionals: Professional[], onEdit: () => void, onToggleAgent: () => void, onRefresh: () => void }) {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [status, setStatus] = useState(instance.status);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   const linkedProf = professionals.find((p) => p.id === instance.professionalId);
   const agentEnabled = instance.agent?.enabled ?? true;
@@ -178,21 +169,16 @@ function InstanceCard({
   const createAndConnect = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/evolution/instance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instanceName: instance.instanceName, prompt: instance.prompt }),
+      const data = await api.post<any>('/api/evolution/instance', { 
+        instanceName: instance.instanceName, 
+        prompt: instance.prompt 
       });
-      const data = await res.json();
-      if (data.qrcode && data.qrcode.base64) {
+      if (data.qrcode?.base64) {
         setQrCode(data.qrcode.base64);
         setStatus('connecting');
-        await updateDoc(doc(db, 'whatsapp_instances', instance.id), { status: 'connecting' });
       } else if (data.instance?.status === 'open' || data.instance?.state === 'open') {
         setStatus('open');
-        await updateDoc(doc(db, 'whatsapp_instances', instance.id), { status: 'open' });
-      } else if (data.error && data.error.includes('already exists')) {
-        checkStatus();
+        setQrCode(null);
       }
     } catch (e) {
       console.error(e);
@@ -204,24 +190,14 @@ function InstanceCard({
   const checkStatus = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/evolution/instance/${instance.instanceName}/connection`);
-      const data = await res.json();
-
-      let newStatus = status;
+      const data = await api.get<any>(`/api/evolution/instance/${instance.instanceName}/connection`);
       if (data?.instance?.state === 'open') {
-        newStatus = 'open';
+        setStatus('open');
         setQrCode(null);
+        await api.put(`/api/whatsapp/instances/${instance.id}`, { status: 'open' });
       } else if (data?.base64) {
-        newStatus = 'connecting';
+        setStatus('connecting');
         setQrCode(data.base64);
-      } else if (data?.instance?.state === 'close') {
-        newStatus = 'disconnected';
-        setQrCode(null);
-      }
-
-      if (newStatus !== status) {
-        setStatus(newStatus as any);
-        await updateDoc(doc(db, 'whatsapp_instances', instance.id), { status: newStatus });
       }
     } catch (e) {
       console.error(e);
@@ -231,239 +207,150 @@ function InstanceCard({
   };
 
   const deleteInstance = async () => {
+    if (!confirm('Tem certeza? Isso removerá a conexão do WhatsApp.')) return;
     setDeleting(true);
     try {
-      const response = await fetch(`/api/evolution/instance/${instance.instanceName}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        console.error('Evolution Delete failed:', await response.text());
-      }
-      await deleteDoc(doc(db, 'whatsapp_instances', instance.id));
+      await api.delete(`/api/whatsapp/instances/${instance.id}`);
       onRefresh();
     } catch (e) {
-      console.error('Error deleting instance:', e);
+      console.error(e);
     } finally {
       setDeleting(false);
-      setShowConfirmDelete(false);
     }
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col md:flex-row">
-      <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
-        <div>
-          <div className="flex justify-between items-start mb-4">
+    <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-xl shadow-slate-100/50">
+      <div className="flex-1 p-10 flex flex-col justify-between">
+        <div className="space-y-8">
+          <div className="flex justify-between items-start">
             <div>
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight">{instance.name}</h3>
-              <p className="text-xs font-mono text-slate-400 mt-1">{instance.instanceName}</p>
+              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{instance.name}</h3>
+              <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-1">ID: {instance.instanceName}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl">
               <button
                 onClick={onToggleAgent}
-                title={agentEnabled ? 'Pausar agente IA' : 'Ativar agente IA'}
                 className={cn(
-                  'p-2 rounded-lg transition-colors',
+                  'p-2.5 rounded-xl transition-all',
                   agentEnabled
-                    ? 'text-emerald-600 hover:bg-emerald-50'
-                    : 'text-slate-400 hover:bg-slate-100'
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
+                    : 'text-slate-400 hover:text-slate-600'
                 )}
               >
-                {agentEnabled ? <Bot size={16} /> : <BotOff size={16} />}
+                {agentEnabled ? <Bot size={18} /> : <BotOff size={18} />}
               </button>
-              <button onClick={onEdit} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
-                <Edit2 size={16} />
+              <button onClick={onEdit} className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
+                <Edit2 size={18} />
               </button>
-              <button disabled={deleting} onClick={() => setShowConfirmDelete(true)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                {deleting ? <RefreshCcw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              <button disabled={deleting} onClick={deleteInstance} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                {deleting ? <RefreshCcw size={18} className="animate-spin" /> : <Trash2 size={18} />}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mb-6 flex-wrap">
-            {linkedProf ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-widest rounded-md">
-                <Link size={12} /> {linkedProf.name}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-md">
-                Clínica (Geral)
-              </span>
-            )}
-
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md',
-                status === 'open'
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : status === 'connecting'
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-slate-100 text-slate-500'
-              )}
-            >
-              {status === 'open' ? 'Conectado' : status === 'connecting' ? 'Aguardando QR' : 'Desconectado'}
-            </span>
-
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md',
-                agentEnabled
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-slate-100 text-slate-500'
-              )}
-            >
-              {agentEnabled ? <Bot size={12} /> : <BotOff size={12} />}
-              IA {agentEnabled ? 'ativa' : 'pausada'}
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <Link size={12} className="text-emerald-500" />
+                {linkedProf ? linkedProf.name : 'Atendimento Geral'}
+             </div>
+             <div className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border",
+                status === 'open' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
+             )}>
+                <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", status === 'open' ? "bg-emerald-500" : "bg-amber-500")} />
+                {status === 'open' ? 'Online' : 'Conectando'}
+             </div>
           </div>
 
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-6">
-            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-              <Bot size={14} /> Prompt do Agente
-            </h4>
-            <p className="text-sm text-slate-600 font-medium line-clamp-2">{instance.prompt}</p>
+          <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100/50">
+             <div className="flex items-center gap-2 mb-3">
+                <Sparkles size={14} className="text-emerald-500" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personalidade da IA</span>
+             </div>
+             <p className="text-sm text-slate-600 font-bold italic leading-relaxed line-clamp-3">"{instance.prompt}"</p>
           </div>
         </div>
       </div>
 
-      <div className="w-full md:w-80 bg-slate-50 border-t md:border-t-0 md:border-l border-slate-100 p-8 flex flex-col items-center justify-center">
+      <div className="w-full md:w-96 bg-slate-50/50 border-t md:border-t-0 md:border-l border-slate-100 p-10 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-slate-50/30">
         {status === 'open' ? (
-          <div className="text-center">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-200">
-              <Bot size={28} />
+          <div className="text-center space-y-6">
+            <div className="w-24 h-24 bg-emerald-500 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-emerald-100 animate-pulse">
+              <Bot size={42} />
             </div>
-            <h4 className="font-bold text-emerald-800 text-lg">Online e Operante</h4>
-            <p className="text-emerald-600 text-sm mt-1 mb-6 font-medium">Este agente está escutando mensagens.</p>
-            <button disabled={loading} onClick={checkStatus} className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline flex flex-col items-center gap-1 mx-auto">
-              <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> testar conexão
+            <div>
+              <h4 className="font-bold text-slate-900 text-xl tracking-tight">Ativo no WhatsApp</h4>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Sincronizado com Evolution API</p>
+            </div>
+            <button onClick={checkStatus} disabled={loading} className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto shadow-sm">
+               <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} />
+               Verificar Status
             </button>
           </div>
-        ) : status === 'connecting' && qrCode ? (
-          <div className="text-center w-full">
-            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm mx-auto w-48 h-48 mb-4">
-              <img src={qrCode} alt="WhatsApp QR Code" className="w-full h-full" />
+        ) : qrCode ? (
+          <div className="text-center w-full space-y-8">
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xl mx-auto w-56 h-56 relative overflow-hidden group">
+               <img src={qrCode} alt="WhatsApp QR" className="w-full h-full" />
+               <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-[9px] font-bold">ESCANEIE AGORA</div>
+               </div>
             </div>
-            <button disabled={loading} onClick={checkStatus} className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors">
-              <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
-              Já escaneei
-            </button>
+            <div className="space-y-4">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Escaneie o código com seu WhatsApp</p>
+              <button onClick={checkStatus} disabled={loading} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 active:scale-95">
+                <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
+                Confirmar Conexão
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="text-center w-full">
-            <div className="w-16 h-16 bg-slate-100 text-slate-300 border border-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <QrCode size={28} />
+          <div className="text-center space-y-8">
+            <div className="w-24 h-24 bg-white border border-slate-100 rounded-[2rem] flex items-center justify-center mx-auto text-slate-200 shadow-xl">
+              <QrCode size={42} />
             </div>
-            <p className="text-xs text-slate-400 font-medium mb-4">Instância desconectada. Clique para gerar o QR Code.</p>
-            <button disabled={loading} onClick={createAndConnect} className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-95 disabled:bg-slate-300">
-              {loading ? <RefreshCcw className="animate-spin" size={14} /> : <QrCode size={14} />}
-              Gerar QR Code
-            </button>
-            <button disabled={loading} onClick={checkStatus} className="mt-4 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-colors flex items-center justify-center gap-1 mx-auto">
-              <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} /> Tentar Reconectar
+            <div className="space-y-2">
+               <h4 className="font-bold text-slate-900 text-lg">Número Desconectado</h4>
+               <p className="text-xs text-slate-400 font-medium">Clique abaixo para vincular seu aparelho.</p>
+            </div>
+            <button onClick={createAndConnect} disabled={loading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-3">
+              {loading ? <RefreshCcw className="animate-spin" size={18} /> : <QrCode size={18} />}
+              Vincular WhatsApp
             </button>
           </div>
         )}
       </div>
-
-      <AnimatePresence>
-        {showConfirmDelete && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowConfirmDelete(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm text-center">
-              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 size={24} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Excluir Instância</h3>
-              <p className="text-sm text-slate-500 mb-6">Tem certeza que deseja desconectar e remover "{instance.name}"? Esta ação não pode ser desfeita.</p>
-              <div className="flex gap-3">
-                <button onClick={() => setShowConfirmDelete(false)} disabled={deleting} className="flex-1 py-2.5 rounded-xl font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={deleteInstance} disabled={deleting} className="flex-1 py-2.5 rounded-xl font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center gap-2">
-                  {deleting ? <RefreshCcw size={16} className="animate-spin" /> : 'Excluir'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
-function InstanceModal({
-  clinicId,
-  existing,
-  professionals,
-  onClose,
-  onSuccess,
-}: {
-  clinicId: string;
-  existing: WhatsAppInstance | null;
-  professionals: Professional[];
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
+function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }: { clinicId: string, existing: WhatsAppInstance | null, professionals: Professional[], onClose: () => void, onSuccess: () => void }) {
   const initialAgent: AgentConfig = { ...DEFAULT_AGENT_CONFIG, ...(existing?.agent ?? {}) };
 
   const [name, setName] = useState(existing?.name || '');
   const [professionalId, setProfessionalId] = useState(existing?.professionalId || '');
-  const [prompt, setPrompt] = useState(
-    existing?.prompt ||
-      'Você é o assistente virtual da clínica. Seja educado e ajude os pacientes a marcar consultas.'
-  );
+  const [prompt, setPrompt] = useState(existing?.prompt || 'Você é o assistente virtual da clínica Cliny. Seja educado, use um tom profissional porém amigável. Ajude os pacientes a marcar consultas e tirar dúvidas básicas.');
   const [agent, setAgent] = useState<AgentConfig>(initialAgent);
   const [submitting, setSubmitting] = useState(false);
-  const [tab, setTab] = useState<
-    'identity' | 'agent' | 'comm' | 'messages' | 'escalation' | 'tools' | 'hours'
-  >('identity');
+  const [tab, setTab] = useState<'identity' | 'agent' | 'config'>('identity');
 
   const updateAgent = (patch: Partial<AgentConfig>) => setAgent((c) => ({ ...c, ...patch }));
-  const updateHours = (patch: Partial<NonNullable<AgentConfig['workingHours']>>) =>
-    setAgent((c) => ({
-      ...c,
-      workingHours: {
-        ...(c.workingHours ?? DEFAULT_AGENT_CONFIG.workingHours!),
-        ...patch,
-      },
-    }));
-
-  const slugify = (s: string) =>
-    s
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const data = {
-        clinicId,
         name,
         professionalId: professionalId || null,
         prompt,
         agent,
-        updatedAt: new Date().toISOString(),
       };
 
       if (existing) {
-        await updateDoc(doc(db, 'whatsapp_instances', existing.id), data);
+        await api.put(`/api/whatsapp/instances/${existing.id}`, data);
       } else {
-        const slugifiedName = slugify(name);
-        const instanceName = slugifiedName
-          ? `${slugifiedName}-${clinicId.substring(0, 5)}`
-          : `wa-${clinicId.substring(0, 5)}-${Date.now().toString(36)}`;
-        await addDoc(collection(db, 'whatsapp_instances'), {
-          ...data,
-          instanceName,
-          status: 'disconnected',
-          createdAt: new Date().toISOString(),
-        });
+        await api.post('/api/whatsapp/instances', { ...data, clinicId });
       }
       onSuccess();
     } catch (e) {
@@ -474,580 +361,157 @@ function InstanceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="relative bg-white w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl flex flex-col"
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative bg-white w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-[2.5rem] shadow-2xl flex flex-col"
       >
-        <div className="p-6 md:p-8 border-b border-slate-100 sticky top-0 bg-white z-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex flex-col gap-1">
-              <h3 className="text-xl font-bold tracking-tight text-slate-900">
-                {existing ? 'Editar Instância' : 'Nova Instância WhatsApp'}
-              </h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                {existing ? 'Atualize as configurações' : 'Configure o número e o agente IA'}
-              </p>
+        <div className="p-8 md:p-10 border-b border-slate-50 bg-white z-10 shrink-0">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <Sparkles size={28} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900">
+                  {existing ? 'Configurações' : 'Novo Agente WhatsApp'}
+                </h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                   Configuração da personalidade e comportamento
+                </p>
+              </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
-              <X size={20} className="text-slate-300" />
+            <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded-2xl transition-all">
+              <X size={24} className="text-slate-300" />
             </button>
           </div>
 
-          <div className="flex gap-1 bg-slate-50 p-1 rounded-xl overflow-x-auto no-scrollbar">
-            {(
-              [
-                ['identity', 'Identidade', <Phone size={14} key="i" />],
-                ['agent', 'Agente', <Sparkles size={14} key="a" />],
-                ['comm', 'Comunicação', <MessageCircle size={14} key="c" />],
-                ['messages', 'Modelos', <Edit2 size={14} key="m" />],
-                ['tools', 'Ferramentas', <Wrench size={14} key="t" />],
-                ['escalation', 'Escalação', <AlertTriangle size={14} key="e" />],
-                ['hours', 'Horários', <Clock size={14} key="h" />],
-              ] as const
-            ).map(([key, label, icon]) => (
+          <div className="flex gap-1.5 bg-slate-50 p-1.5 rounded-2xl">
+            {[
+              { id: 'identity', label: 'Identidade', icon: <Phone size={14} /> },
+              { id: 'agent', label: 'IA & Personalidade', icon: <Bot size={14} /> },
+              { id: 'config', label: 'Comunicação', icon: <MessageCircle size={14} /> },
+            ].map((t) => (
               <button
-                key={key}
+                key={t.id}
                 type="button"
-                onClick={() => setTab(key)}
+                onClick={() => setTab(t.id as any)}
                 className={cn(
-                  'shrink-0 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap',
-                  tab === key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  'flex-1 flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all',
+                  tab === t.id ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-900'
                 )}
               >
-                {icon}
-                {label}
+                {t.icon}
+                {t.label}
               </button>
             ))}
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6 flex-1">
+        <form onSubmit={handleSubmit} className="p-10 space-y-8 flex-1 overflow-y-auto no-scrollbar">
           {tab === 'identity' && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nome da Instância</label>
-                  <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-sm text-slate-900" placeholder="Ex: Recepção Central" />
+            <div className="space-y-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Identificador da Instância</label>
+                  <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-6 py-4.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 shadow-inner" placeholder="Ex: Recepção Dra. Maria" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Vincular a Profissional (Opcional)</label>
-                  <select value={professionalId} onChange={(e) => setProfessionalId(e.target.value)} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-sm text-slate-900 appearance-none cursor-pointer">
-                    <option value="">Clínica Geral (Todos os Serviços)</option>
-                    {professionals.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Escopo de Atendimento</label>
+                  <select value={professionalId} onChange={(e) => setProfessionalId(e.target.value)} className="w-full px-6 py-4.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-900 appearance-none cursor-pointer shadow-inner">
+                    <option value="">Atendimento Geral (Toda Clínica)</option>
+                    {professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Prompt da Inteligência Artificial</label>
-                <p className="text-xs text-slate-500 font-medium mb-3 ml-1">
-                  Ensine como o agente deve responder. A persona, base de conhecimento e horários são adicionados automaticamente ao contexto.
-                </p>
-                <textarea required rows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all text-sm font-medium text-slate-700 leading-relaxed resize-none" placeholder="Instruções para o agente..." />
+              <div className="space-y-4">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Personalidade Principal (System Prompt)</label>
+                <textarea required rows={8} value={prompt} onChange={(e) => setPrompt(e.target.value)} className="w-full p-6 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none transition-all text-sm font-bold text-slate-700 leading-relaxed resize-none shadow-inner" />
               </div>
-            </>
+            </div>
           )}
 
           {tab === 'agent' && (
-            <div className="space-y-6">
-              <div className="flex items-start justify-between p-4 bg-slate-50 rounded-xl">
+            <div className="space-y-8">
+              <div className="flex items-center justify-between p-6 bg-emerald-50/30 border border-emerald-100/30 rounded-3xl">
                 <div>
-                  <p className="text-sm font-bold text-slate-900">Agente IA ativo</p>
-                  <p className="text-xs text-slate-500">
-                    Quando desligado, mensagens chegam mas a IA não responde. Pode ser pausado também por conversa.
-                  </p>
+                  <h4 className="font-bold text-slate-900">Agente Ativo</h4>
+                  <p className="text-xs text-slate-500 font-medium">Permitir que a IA responda mensagens automaticamente.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => updateAgent({ enabled: !agent.enabled })}
-                  className={cn('relative w-12 h-7 rounded-full transition-colors shrink-0', agent.enabled ? 'bg-emerald-500' : 'bg-slate-300')}
-                >
-                  <span className={cn('absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform', agent.enabled ? 'left-6' : 'left-1')} />
+                <button type="button" onClick={() => updateAgent({ enabled: !agent.enabled })} className={cn('relative w-14 h-8 rounded-full transition-all shadow-inner', agent.enabled ? 'bg-emerald-500' : 'bg-slate-200')}>
+                  <span className={cn('absolute top-1.5 w-5 h-5 bg-white rounded-full shadow-lg transition-all', agent.enabled ? 'left-7.5' : 'left-1.5')} />
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Modelo Gemini</label>
-                  <select
-                    value={agent.model || 'gemini-2.5-flash'}
-                    onChange={(e) => updateAgent({ model: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-sm text-slate-900 cursor-pointer"
-                  >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (rápido)</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (mais inteligente)</option>
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Persona / Tom</label>
-                  <input
-                    type="text"
-                    value={agent.persona || ''}
-                    onChange={(e) => updateAgent({ persona: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-medium text-sm text-slate-900"
-                    placeholder="Ex: jovem, descontraído e empático"
-                  />
-                </div>
+              <div className="space-y-4">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Base de Conhecimento Especializada</label>
+                 <textarea rows={6} value={agent.knowledgeBase || ''} onChange={(e) => updateAgent({ knowledgeBase: e.target.value })} className="w-full p-6 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl outline-none font-bold text-sm text-slate-700 leading-relaxed resize-none shadow-inner" placeholder="Detalhes sobre localização, convênios, estacionamento, valores, etc." />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Delay mín. (s)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={120}
-                    value={agent.responseDelayMin ?? 2}
-                    onChange={(e) => updateAgent({ responseDelayMin: Number(e.target.value) })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-sm text-slate-900"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Delay máx. (s)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={120}
-                    value={agent.responseDelayMax ?? 6}
-                    onChange={(e) => updateAgent({ responseDelayMax: Number(e.target.value) })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-semibold text-sm text-slate-900"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl w-full cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={agent.showTyping !== false}
-                      onChange={(e) => updateAgent({ showTyping: e.target.checked })}
-                      className="w-4 h-4 accent-emerald-500"
-                    />
-                    <span className="text-sm font-semibold text-slate-700">Mostrar "digitando…"</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  Base de Conhecimento (RAG simples)
-                </label>
-                <p className="text-xs text-slate-500 font-medium mb-2 ml-1">
-                  FAQ, valores, procedimentos, endereço, formas de pagamento. Esse texto é injetado no contexto do agente em toda conversa.
-                </p>
-                <textarea
-                  rows={6}
-                  value={agent.knowledgeBase || ''}
-                  onChange={(e) => updateAgent({ knowledgeBase: e.target.value })}
-                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all text-sm font-medium text-slate-700 leading-relaxed resize-none"
-                  placeholder="Ex: Aceitamos PIX e cartão. Endereço: Rua X, 123. Procedimentos comuns: limpeza (R$ 150), avaliação (grátis)."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mensagem de Fallback</label>
-                <input
-                  type="text"
-                  value={agent.fallbackMessage || ''}
-                  onChange={(e) => updateAgent({ fallbackMessage: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all font-medium text-sm text-slate-900"
-                  placeholder="Mensagem enviada quando o agente falha"
-                />
+              <div className="grid grid-cols-2 gap-8">
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Modelo de IA</label>
+                    <select value={agent.model || 'gemini-2.5-flash'} onChange={(e) => updateAgent({ model: e.target.value })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner">
+                       <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                       <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                    </select>
+                 </div>
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Assinatura</label>
+                    <input type="text" value={agent.signature || ''} onChange={(e) => updateAgent({ signature: e.target.value })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner" placeholder="Ex: — Assistente Cliny" />
+                 </div>
               </div>
             </div>
           )}
 
-          {tab === 'comm' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Idioma</label>
-                  <select
-                    value={agent.language || 'pt-BR'}
-                    onChange={(e) => updateAgent({ language: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
-                  >
-                    <option value="pt-BR">Português (Brasil)</option>
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Formalidade</label>
-                  <select
-                    value={agent.formality || 'voce'}
-                    onChange={(e) => updateAgent({ formality: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
-                  >
-                    <option value="tu">Tu (informal regional)</option>
-                    <option value="voce">Você (informal padrão)</option>
-                    <option value="senhor">Senhor / Senhora (formal)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tamanho da resposta</label>
-                  <select
-                    value={agent.responseSize || 'medium'}
-                    onChange={(e) => updateAgent({ responseSize: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
-                  >
-                    <option value="short">Curto (1-2 frases)</option>
-                    <option value="medium">Médio (até 3 parágrafos)</option>
-                    <option value="long">Longo (detalhado)</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Uso de emojis</label>
-                  <select
-                    value={agent.emojiUse || 'light'}
-                    onChange={(e) => updateAgent({ emojiUse: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900 cursor-pointer"
-                  >
-                    <option value="never">Nunca</option>
-                    <option value="light">Leve (1 por resposta)</option>
-                    <option value="free">Livre</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                    Criatividade (temperature: {agent.temperature ?? 0.5})
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={agent.temperature ?? 0.5}
-                    onChange={(e) => updateAgent({ temperature: Number(e.target.value) })}
-                    className="w-full accent-emerald-500"
-                  />
-                  <div className="flex justify-between text-[10px] font-bold text-slate-300 px-1">
-                    <span>Determinístico</span>
-                    <span>Criativo</span>
+          {tab === 'config' && (
+            <div className="space-y-8">
+               <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Tom de Voz</label>
+                    <select value={agent.formality || 'voce'} onChange={(e) => updateAgent({ formality: e.target.value as any })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner">
+                       <option value="voce">Informal (Você)</option>
+                       <option value="senhor">Formal (Senhor/a)</option>
+                    </select>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                    Tokens máximos por resposta
-                  </label>
-                  <input
-                    type="number"
-                    min={128}
-                    max={4096}
-                    step={64}
-                    value={agent.maxOutputTokens ?? 800}
-                    onChange={(e) => updateAgent({ maxOutputTokens: Number(e.target.value) })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Assinatura (opcional)</label>
-                <input
-                  type="text"
-                  value={agent.signature || ''}
-                  onChange={(e) => updateAgent({ signature: e.target.value })}
-                  placeholder="Ex: — Equipe Cliny"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-medium text-sm text-slate-900"
-                />
-                <p className="text-xs text-slate-400 ml-1">Será adicionada ao final de cada resposta automaticamente.</p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  Tópicos proibidos (1 por linha)
-                </label>
-                <textarea
-                  rows={4}
-                  value={(agent.forbiddenTopics ?? []).join('\n')}
-                  onChange={(e) =>
-                    updateAgent({ forbiddenTopics: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })
-                  }
-                  placeholder={'Ex:\nDiagnósticos médicos\nReceitas de medicamentos\nQuestões legais'}
-                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                />
-              </div>
-            </div>
-          )}
-
-          {tab === 'messages' && (
-            <div className="space-y-6">
-              <p className="text-xs text-slate-500 ml-1 leading-relaxed">
-                Modelos enviados pela IA em momentos específicos. Use os marcadores
-                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{paciente}'}</code>
-                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{data}'}</code>
-                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{hora}'}</code>
-                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{profissional}'}</code>
-                <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded text-[11px]">{'{servico}'}</code>
-                — eles serão substituídos no envio.
-              </p>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  Após confirmar agendamento
-                </label>
-                <textarea
-                  rows={3}
-                  value={agent.triggers?.onAppointmentCreated || ''}
-                  onChange={(e) =>
-                    updateAgent({ triggers: { ...(agent.triggers ?? {}), onAppointmentCreated: e.target.value } })
-                  }
-                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  Após cancelar agendamento
-                </label>
-                <textarea
-                  rows={3}
-                  value={agent.triggers?.onAppointmentCancelled || ''}
-                  onChange={(e) =>
-                    updateAgent({ triggers: { ...(agent.triggers ?? {}), onAppointmentCancelled: e.target.value } })
-                  }
-                  placeholder="Ex: Tudo certo, {paciente}. Sua consulta de {data} às {hora} foi cancelada."
-                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  Mensagem de saudação inicial (opcional)
-                </label>
-                <textarea
-                  rows={3}
-                  value={agent.greetingMessage || ''}
-                  onChange={(e) => updateAgent({ greetingMessage: e.target.value })}
-                  placeholder="Texto enviado uma única vez quando o paciente fala com a clínica pela primeira vez."
-                  className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                />
-              </div>
-            </div>
-          )}
-
-          {tab === 'tools' && (
-            <div className="space-y-6">
-              <p className="text-xs text-slate-500 ml-1 leading-relaxed">
-                Habilite ou desabilite cada habilidade do agente. Quando desligada, a IA não poderá realizar a ação.
-              </p>
-              {(
-                [
-                  ['resolve_date', 'Interpretar datas em texto livre', 'Resolve "terça", "amanhã", "10/06" no fuso da clínica. Recomendado deixar ativo.'],
-                  ['list_services', 'Listar serviços e preços', 'Recomendado deixar ativo.'],
-                  ['list_available_slots', 'Listar horários disponíveis (hora marcada)', 'Necessário para sugerir horários.'],
-                  ['create_appointment', 'Criar agendamento (hora marcada)', 'Desligue se quiser que a IA apenas sugira (humano confirma).'],
-                  ['list_available_periods', 'Listar períodos (ordem de chegada)', 'Para profissionais walk-in.'],
-                  ['create_walk_in_appointment', 'Criar agendamento por ordem de chegada', 'Para profissionais walk-in.'],
-                  ['list_patient_appointments', 'Ver agendamentos do paciente', ''],
-                  ['cancel_appointment', 'Cancelar agendamento', ''],
-                  ['transfer_to_human', 'Transferir para humano', 'Pausa a IA na conversa.'],
-                ] as const
-              ).map(([key, label, hint]) => {
-                const tools = agent.tools ?? {};
-                const value = (tools as any)[key] !== false;
-                return (
-                  <div key={key} className="flex items-start justify-between p-4 bg-slate-50 rounded-xl">
-                    <div className="flex-1 min-w-0 mr-4">
-                      <p className="text-sm font-bold text-slate-900">{label}</p>
-                      {hint && <p className="text-xs text-slate-500 mt-0.5">{hint}</p>}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateAgent({ tools: { ...tools, [key]: !value } })}
-                      className={cn('relative w-12 h-7 rounded-full transition-colors shrink-0', value ? 'bg-emerald-500' : 'bg-slate-300')}
-                    >
-                      <span className={cn('absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform', value ? 'left-6' : 'left-1')} />
-                    </button>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Uso de Emojis</label>
+                    <select value={agent.emojiUse || 'light'} onChange={(e) => updateAgent({ emojiUse: e.target.value as any })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner">
+                       <option value="never">Nunca</option>
+                       <option value="light">Leve</option>
+                       <option value="free">Livre</option>
+                    </select>
                   </div>
-                );
-              })}
+               </div>
+               
+               <div className="space-y-4">
+                  <div className="flex justify-between items-center px-1">
+                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atraso na Resposta (segundos)</label>
+                     <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{agent.responseDelayMin}s - {agent.responseDelayMax}s</span>
+                  </div>
+                  <div className="flex items-center gap-6">
+                     <input type="range" min={0} max={30} value={agent.responseDelayMax} onChange={(e) => updateAgent({ responseDelayMax: Number(e.target.value), responseDelayMin: Math.min(agent.responseDelayMin!, Number(e.target.value) - 1) })} className="flex-1 accent-emerald-500" />
+                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Mensagem de Transbordo (Indisponibilidade)</label>
+                  <input type="text" value={agent.fallbackMessage || ''} onChange={(e) => updateAgent({ fallbackMessage: e.target.value })} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm shadow-inner" placeholder="Ex: No momento nossos atendentes estão ocupados..." />
+               </div>
             </div>
           )}
-
-          {tab === 'escalation' && (
-            <div className="space-y-6">
-              <div className="flex items-start justify-between p-4 bg-slate-50 rounded-xl">
-                <div>
-                  <p className="text-sm font-bold text-slate-900">Detectar palavras-chave</p>
-                  <p className="text-xs text-slate-500">
-                    Quando o paciente mandar uma destas palavras, a IA pausa nesta conversa e envia a mensagem de transferência.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateAgent({
-                      escalation: {
-                        ...(agent.escalation ?? { enabled: false, keywords: [] }),
-                        enabled: !(agent.escalation?.enabled ?? false),
-                      },
-                    })
-                  }
-                  className={cn(
-                    'relative w-12 h-7 rounded-full transition-colors shrink-0',
-                    agent.escalation?.enabled ? 'bg-emerald-500' : 'bg-slate-300'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                      agent.escalation?.enabled ? 'left-6' : 'left-1'
-                    )}
-                  />
-                </button>
-              </div>
-
-              <div className={cn('space-y-4', !agent.escalation?.enabled && 'opacity-40 pointer-events-none')}>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                    Palavras-chave (1 por linha)
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={(agent.escalation?.keywords ?? []).join('\n')}
-                    onChange={(e) =>
-                      updateAgent({
-                        escalation: {
-                          ...(agent.escalation ?? { enabled: true, keywords: [] }),
-                          keywords: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                        },
-                      })
-                    }
-                    placeholder={'humano\natendente\nfalar com pessoa\nreclamar'}
-                    className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                    Mensagem ao transferir
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={agent.escalation?.notifyMessage || ''}
-                    onChange={(e) =>
-                      updateAgent({
-                        escalation: {
-                          ...(agent.escalation ?? { enabled: true, keywords: [] }),
-                          notifyMessage: e.target.value,
-                        },
-                      })
-                    }
-                    placeholder="Texto enviado ao paciente confirmando que um humano vai atender."
-                    className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === 'hours' && (
-            <div className="space-y-6">
-              <div className="flex items-start justify-between p-4 bg-slate-50 rounded-xl">
-                <div>
-                  <p className="text-sm font-bold text-slate-900">Restringir horário de atendimento</p>
-                  <p className="text-xs text-slate-500">
-                    Fora do horário, a IA envia uma mensagem padrão e não tenta responder.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => updateHours({ enabled: !agent.workingHours?.enabled })}
-                  className={cn('relative w-12 h-7 rounded-full transition-colors shrink-0', agent.workingHours?.enabled ? 'bg-emerald-500' : 'bg-slate-300')}
-                >
-                  <span className={cn('absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform', agent.workingHours?.enabled ? 'left-6' : 'left-1')} />
-                </button>
-              </div>
-
-              <div className={cn('space-y-6 transition-opacity', !agent.workingHours?.enabled && 'opacity-40 pointer-events-none')}>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Início</label>
-                    <input
-                      type="time"
-                      value={agent.workingHours?.start || '08:00'}
-                      onChange={(e) => updateHours({ start: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Fim</label>
-                    <input
-                      type="time"
-                      value={agent.workingHours?.end || '18:00'}
-                      onChange={(e) => updateHours({ end: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none font-semibold text-sm text-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2 block">
-                    Dias da Semana
-                  </label>
-                  <div className="flex gap-2">
-                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => {
-                      const active = agent.workingHours?.weekdays.includes(i);
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => {
-                            const wd = new Set<number>(agent.workingHours?.weekdays ?? []);
-                            if (wd.has(i)) wd.delete(i);
-                            else wd.add(i);
-                            updateHours({ weekdays: Array.from(wd).sort((a, b) => a - b) });
-                          }}
-                          className={cn(
-                            'flex-1 h-12 rounded-xl text-sm font-bold transition-all',
-                            active ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 text-slate-400'
-                          )}
-                        >
-                          {d}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                    Mensagem fora do horário
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={agent.workingHours?.outOfHoursMessage || ''}
-                    onChange={(e) => updateHours({ outOfHoursMessage: e.target.value })}
-                    className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded-xl outline-none text-sm font-medium text-slate-700 resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-300 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-3 mt-4 active:scale-95"
-          >
-            {submitting ? 'Salvando...' : existing ? 'Salvar Alterações' : 'Criar Instância'}
-          </button>
         </form>
+
+        <div className="p-10 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0 rounded-t-[2rem]">
+          <button type="button" onClick={onClose} className="text-[11px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all">Cancelar</button>
+          <button onClick={handleSubmit} disabled={submitting} className="px-12 py-5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-[0.98] flex items-center gap-3">
+            {submitting ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Salvar Configurações'}
+          </button>
+        </div>
       </motion.div>
     </div>
   );
