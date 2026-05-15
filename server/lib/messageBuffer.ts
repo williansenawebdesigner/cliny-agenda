@@ -1,78 +1,94 @@
 /**
- * In-memory debounce buffer for WhatsApp messages.
+ * Supabase-backed message debounce for WhatsApp webhook.
  *
- * Patients often send several short messages in quick succession.
- * This module collects them for DEBOUNCE_MS of silence, then calls
- * onFlush once with all messages joined — so the agent gets a single
- * coherent turn instead of replying to every fragment.
+ * Strategy: each message sleeps for `debounceMs`, then checks Supabase to see
+ * if a newer patient message arrived after it. If yes → bail, the last message
+ * handles everything. If no → collect all unresponded messages (since the last
+ * agent reply) and run the agent once.
  *
- * Works in Express (single process) and on Vercel Fluid Compute (which
- * reuses function instances across concurrent requests, so rapid messages
- * from the same conversation almost always land on the same instance).
- * Worst case on Vercel: two fragments hit different instances and the agent
- * replies twice — graceful degradation, not a failure.
+ * Works across Vercel instances because coordination uses shared DB state,
+ * not in-process memory.
  */
 
-export const DEBOUNCE_MS = 3000;
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-interface PendingEntry {
-  messages: string[];
-  /** Unix seconds of the first message in this window — used to slice history */
-  bufferStartTs: number;
-  timer: ReturnType<typeof setTimeout>;
-  onFlush: (combined: string, historyBeforeTs: number) => Promise<void>;
-  resolvers: Array<() => void>;
+function sleep(ms: number) {
+  return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-const pending = new Map<string, PendingEntry>();
+export interface FlushResult {
+  combined: string;
+  /** Exclude history messages at/after this unix-second ts (they're in `combined`) */
+  historyBeforeTs: number;
+}
 
 /**
- * Enqueue a message for debounced processing.
+ * Sleep for `debounceMs`, then decide whether this message is the last one in
+ * its burst. Returns a FlushResult to run the agent with, or null to bail out.
  *
- * Returns a Promise that resolves when the agent finishes running (or
- * immediately if this message was preempted by a later one). Pass the
- * returned promise to Vercel's `waitUntil` to keep the function alive.
+ * @param myTs  - epoch seconds of THIS message (from WhatsApp payload)
+ * @param myText - text of THIS message (used as fallback if DB queries fail)
  */
-export function debounceAgentRun(
+export async function waitAndFlush(
+  db: SupabaseClient,
   instanceName: string,
   jid: string,
-  text: string,
-  onFlush: (combined: string, historyBeforeTs: number) => Promise<void>,
-): Promise<void> {
-  const key = `${instanceName}__${jid}`;
+  myTs: number,
+  myText: string,
+  debounceMs: number,
+): Promise<FlushResult | null> {
+  await sleep(debounceMs);
 
-  return new Promise<void>((resolve) => {
-    const nowSec = Math.floor(Date.now() / 1000);
-    let entry = pending.get(key);
+  try {
+    // Is there a newer patient message after ours?
+    const { data: newer } = await db
+      .from('whatsapp_messages')
+      .select('id')
+      .eq('instance_name', instanceName)
+      .eq('remote_jid', jid)
+      .eq('from_me', false)
+      .gt('message_timestamp', myTs)
+      .limit(1);
 
-    if (entry) {
-      // Another message is already buffered — extend the window.
-      clearTimeout(entry.timer);
-      entry.messages.push(text);
-      entry.onFlush = onFlush; // use latest request context (agent config, etc.)
-      entry.resolvers.push(resolve);
-    } else {
-      entry = {
-        messages: [text],
-        bufferStartTs: nowSec,
-        timer: null as unknown as ReturnType<typeof setTimeout>,
-        onFlush,
-        resolvers: [resolve],
-      };
-      pending.set(key, entry);
-    }
+    if (newer && newer.length > 0) return null; // another message will handle it
 
-    // (Re)set the debounce timer — fires after DEBOUNCE_MS of silence.
-    entry.timer = setTimeout(async () => {
-      pending.delete(key);
-      const combined = entry!.messages.join('\n');
-      try {
-        await entry!.onFlush(combined, entry!.bufferStartTs);
-      } catch (e) {
-        console.error('[debounce] agent run failed', e);
-      } finally {
-        entry!.resolvers.forEach((r) => r());
-      }
-    }, DEBOUNCE_MS);
-  });
+    // We're the last message — collect everything since the last agent reply.
+    const { data: lastAgent } = await db
+      .from('whatsapp_messages')
+      .select('message_timestamp')
+      .eq('instance_name', instanceName)
+      .eq('remote_jid', jid)
+      .eq('from_me', true)
+      .eq('source', 'agent')
+      .order('message_timestamp', { ascending: false })
+      .limit(1);
+
+    const lastAgentTs = lastAgent?.[0]?.message_timestamp ?? 0;
+    // Look back at most 10 minutes to avoid pulling in very old messages
+    const batchStart = Math.max(lastAgentTs, myTs - 600);
+
+    const { data: batch } = await db
+      .from('whatsapp_messages')
+      .select('content')
+      .eq('instance_name', instanceName)
+      .eq('remote_jid', jid)
+      .eq('from_me', false)
+      .gt('message_timestamp', batchStart)
+      .order('message_timestamp', { ascending: true });
+
+    const messages = (batch ?? [])
+      .map((m) => (m.content as string) ?? '')
+      .filter(Boolean);
+
+    if (messages.length === 0) return null;
+
+    return {
+      combined: messages.join('\n'),
+      historyBeforeTs: batchStart + 1,
+    };
+  } catch (err) {
+    console.error('[messageBuffer] DB error, falling back to single message', err);
+    // Fallback: just process this one message
+    return { combined: myText, historyBeforeTs: myTs };
+  }
 }

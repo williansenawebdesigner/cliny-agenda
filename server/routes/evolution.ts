@@ -18,7 +18,7 @@ import {
   pickReplyDelayMs,
   sleep,
 } from '../lib/agent.js';
-import { debounceAgentRun } from '../lib/messageBuffer.js';
+import { waitAndFlush } from '../lib/messageBuffer.js';
 
 export const evolutionRouter = Router();
 
@@ -495,13 +495,17 @@ evolutionRouter.post('/webhook', async (req, res) => {
       pushName: messageData?.pushName ?? null,
     };
 
-    runAgentTask = debounceAgentRun(
-      instanceName,
-      jid,
-      content,
-      (combined, historyBeforeTs) =>
-        runAgent({ ...baseInput, userMessage: combined, historyBeforeTs }),
-    );
+    // Buffer window = responseDelayMax (the "reading + thinking" time already
+    // configured by the clinic). Messages arriving within this window are merged
+    // into a single agent turn. Check is done via Supabase so it works across
+    // Vercel instances without any in-process shared state.
+    const debounceMs = (agent.responseDelayMax ?? DEFAULT_AGENT.responseDelayMax ?? 6) * 1000;
+
+    runAgentTask = (async () => {
+      const flush = await waitAndFlush(db, instanceName, jid, messageTimestamp, content, debounceMs);
+      if (!flush) return; // a newer message will handle this burst
+      await runAgent({ ...baseInput, userMessage: flush.combined, historyBeforeTs: flush.historyBeforeTs });
+    })();
   }
 
   // Em produção (Vercel), `waitUntil` mantém o agent rodando após o 200; em dev
