@@ -299,13 +299,22 @@ export async function loadRecentHistory(
   db: SupabaseClient,
   instanceName: string,
   remoteJid: string,
-  limit = 20
+  limit = 20,
+  beforeTs?: number,
 ): Promise<ConversationTurn[]> {
-  const { data } = await db
+  let query = db
     .from('whatsapp_messages')
     .select('from_me, content, message_timestamp')
     .eq('instance_name', instanceName)
-    .eq('remote_jid', remoteJid)
+    .eq('remote_jid', remoteJid);
+
+  // Exclude messages that belong to the current debounce window so they don't
+  // appear both in history and in the combined userMessage passed to the model.
+  if (beforeTs && beforeTs > 0) {
+    query = query.lt('message_timestamp', beforeTs);
+  }
+
+  const { data } = await query
     .order('message_timestamp', { ascending: false })
     .limit(limit);
   if (!data || data.length === 0) return [];

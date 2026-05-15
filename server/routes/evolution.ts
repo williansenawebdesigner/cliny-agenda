@@ -18,6 +18,11 @@ import {
   pickReplyDelayMs,
   sleep,
 } from '../lib/agent.js';
+import {
+  DEBOUNCE_MS,
+  bufferMessage,
+  tryFlushBuffer,
+} from '../lib/messageBuffer.js';
 
 export const evolutionRouter = Router();
 
@@ -239,6 +244,8 @@ interface AgentRunInput {
   professionalId?: string | null;
   pushName?: string | null;
   userMessage: string;
+  /** Exclude history messages at or after this unix-second timestamp (debounce window start). */
+  historyBeforeTs?: number;
 }
 
 async function runAgent(input: AgentRunInput) {
@@ -253,7 +260,7 @@ async function runAgent(input: AgentRunInput) {
   }
   const db = getAdminClient();
   try {
-    const history = await loadRecentHistory(db, input.instanceName, input.jid, 20);
+    const history = await loadRecentHistory(db, input.instanceName, input.jid, 20, input.historyBeforeTs);
     const systemPrompt = buildSystemPrompt({
       basePrompt: input.basePrompt,
       agent: input.agent,
@@ -479,7 +486,8 @@ evolutionRouter.post('/webhook', async (req, res) => {
     }
   } else {
     agentDecision = 'running';
-    runAgentTask = runAgent({
+
+    const baseInput = {
       clinicId,
       instanceName,
       jid,
@@ -489,8 +497,28 @@ evolutionRouter.post('/webhook', async (req, res) => {
       timezone: clinicTimezone,
       professionalId: instance.professional_id ?? null,
       pushName: messageData?.pushName ?? null,
-      userMessage: content,
-    });
+    };
+
+    const handle = await bufferMessage(instanceName, jid, content);
+
+    if (handle) {
+      // Redis available: debounce — wait for the patient to finish typing,
+      // then flush all buffered messages and run the agent once.
+      const { nonce, bufferStartTs } = handle;
+      runAgentTask = (async () => {
+        await sleep(DEBOUNCE_MS);
+        const flush = await tryFlushBuffer(instanceName, jid, nonce);
+        if (!flush) return; // another message arrived; that task will handle it
+        await runAgent({
+          ...baseInput,
+          userMessage: flush.combined,
+          historyBeforeTs: flush.historyBeforeTs,
+        });
+      })();
+    } else {
+      // No Redis configured: run immediately (original behaviour).
+      runAgentTask = runAgent({ ...baseInput, userMessage: content });
+    }
   }
 
   // Em produção (Vercel), `waitUntil` mantém o agent rodando após o 200; em dev
