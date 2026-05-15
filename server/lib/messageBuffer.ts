@@ -1,120 +1,78 @@
 /**
- * Redis-backed message buffer for WhatsApp webhook debouncing.
+ * In-memory debounce buffer for WhatsApp messages.
  *
  * Patients often send several short messages in quick succession.
- * This module collects them for DEBOUNCE_MS of silence, then flushes
- * them as a single combined string for the agent to process.
+ * This module collects them for DEBOUNCE_MS of silence, then calls
+ * onFlush once with all messages joined — so the agent gets a single
+ * coherent turn instead of replying to every fragment.
  *
- * Pattern: each incoming message sets a lock nonce. After the debounce
- * window, only the holder of the CURRENT nonce runs the agent. All
- * earlier tasks see a stale nonce and bail out silently.
- *
- * Falls back to null (direct run, no buffering) when REDIS_URL is absent.
+ * Works in Express (single process) and on Vercel Fluid Compute (which
+ * reuses function instances across concurrent requests, so rapid messages
+ * from the same conversation almost always land on the same instance).
+ * Worst case on Vercel: two fragments hit different instances and the agent
+ * replies twice — graceful degradation, not a failure.
  */
-
-import Redis from 'ioredis';
 
 export const DEBOUNCE_MS = 3000;
-const BUF_TTL_S = 60;
 
-let _redis: Redis | null = null;
-
-function getRedis(): Redis | null {
-  if (!process.env.REDIS_URL) return null;
-  if (!_redis) {
-    _redis = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: 1,
-      enableReadyCheck: false,
-      lazyConnect: true,
-    });
-    _redis.on('error', (err) => console.error('[redis]', err.message));
-  }
-  return _redis;
-}
-
-const bufKey  = (inst: string, jid: string) => `cliny:buf:${inst}:${jid}`;
-const lockKey = (inst: string, jid: string) => `cliny:lock:${inst}:${jid}`;
-const tsKey   = (inst: string, jid: string) => `cliny:bts:${inst}:${jid}`;
-
-export interface MessageBufferHandle {
-  nonce: string;
+interface PendingEntry {
+  messages: string[];
   /** Unix seconds of the first message in this window — used to slice history */
   bufferStartTs: number;
+  timer: ReturnType<typeof setTimeout>;
+  onFlush: (combined: string, historyBeforeTs: number) => Promise<void>;
+  resolvers: Array<() => void>;
 }
 
-export interface BufferFlush {
-  combined: string;
-  historyBeforeTs: number;
-}
+const pending = new Map<string, PendingEntry>();
 
 /**
- * Push a message into the debounce buffer.
- * Returns null when Redis is unavailable (caller should run agent immediately).
+ * Enqueue a message for debounced processing.
+ *
+ * Returns a Promise that resolves when the agent finishes running (or
+ * immediately if this message was preempted by a later one). Pass the
+ * returned promise to Vercel's `waitUntil` to keep the function alive.
  */
-export async function bufferMessage(
+export function debounceAgentRun(
   instanceName: string,
   jid: string,
   text: string,
-): Promise<MessageBufferHandle | null> {
-  const redis = getRedis();
-  if (!redis) return null;
+  onFlush: (combined: string, historyBeforeTs: number) => Promise<void>,
+): Promise<void> {
+  const key = `${instanceName}__${jid}`;
 
-  try {
-    const nonce = Date.now().toString();
+  return new Promise<void>((resolve) => {
     const nowSec = Math.floor(Date.now() / 1000);
+    let entry = pending.get(key);
 
-    // NX preserves the original window-start timestamp across multiple messages
-    await redis.set(tsKey(instanceName, jid), nowSec.toString(), 'EX', BUF_TTL_S, 'NX');
-    const stored = await redis.get(tsKey(instanceName, jid));
-    const bufferStartTs = stored ? parseInt(stored, 10) : nowSec;
+    if (entry) {
+      // Another message is already buffered — extend the window.
+      clearTimeout(entry.timer);
+      entry.messages.push(text);
+      entry.onFlush = onFlush; // use latest request context (agent config, etc.)
+      entry.resolvers.push(resolve);
+    } else {
+      entry = {
+        messages: [text],
+        bufferStartTs: nowSec,
+        timer: null as unknown as ReturnType<typeof setTimeout>,
+        onFlush,
+        resolvers: [resolve],
+      };
+      pending.set(key, entry);
+    }
 
-    const pipeline = redis.pipeline();
-    pipeline.rpush(bufKey(instanceName, jid), text);
-    pipeline.expire(bufKey(instanceName, jid), BUF_TTL_S);
-    pipeline.set(lockKey(instanceName, jid), nonce, 'EX', BUF_TTL_S);
-    await pipeline.exec();
-
-    return { nonce, bufferStartTs };
-  } catch (err) {
-    console.error('[messageBuffer] bufferMessage failed', err);
-    return null;
-  }
-}
-
-/**
- * Try to flush the buffer after the debounce window.
- * Returns null when another message arrived after us (stale nonce) —
- * the caller should exit without running the agent.
- */
-export async function tryFlushBuffer(
-  instanceName: string,
-  jid: string,
-  nonce: string,
-): Promise<BufferFlush | null> {
-  const redis = getRedis();
-  if (!redis) return null;
-
-  try {
-    const currentLock = await redis.get(lockKey(instanceName, jid));
-    if (currentLock !== nonce) return null;
-
-    const [messages, bufStartStr] = await Promise.all([
-      redis.lrange(bufKey(instanceName, jid), 0, -1),
-      redis.get(tsKey(instanceName, jid)),
-    ]);
-
-    const pipeline = redis.pipeline();
-    pipeline.del(bufKey(instanceName, jid));
-    pipeline.del(lockKey(instanceName, jid));
-    pipeline.del(tsKey(instanceName, jid));
-    await pipeline.exec();
-
-    return {
-      combined: messages.filter(Boolean).join('\n'),
-      historyBeforeTs: bufStartStr ? parseInt(bufStartStr, 10) : 0,
-    };
-  } catch (err) {
-    console.error('[messageBuffer] tryFlushBuffer failed', err);
-    return null;
-  }
+    // (Re)set the debounce timer — fires after DEBOUNCE_MS of silence.
+    entry.timer = setTimeout(async () => {
+      pending.delete(key);
+      const combined = entry!.messages.join('\n');
+      try {
+        await entry!.onFlush(combined, entry!.bufferStartTs);
+      } catch (e) {
+        console.error('[debounce] agent run failed', e);
+      } finally {
+        entry!.resolvers.forEach((r) => r());
+      }
+    }, DEBOUNCE_MS);
+  });
 }

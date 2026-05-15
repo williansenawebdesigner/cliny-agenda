@@ -18,11 +18,7 @@ import {
   pickReplyDelayMs,
   sleep,
 } from '../lib/agent.js';
-import {
-  DEBOUNCE_MS,
-  bufferMessage,
-  tryFlushBuffer,
-} from '../lib/messageBuffer.js';
+import { debounceAgentRun } from '../lib/messageBuffer.js';
 
 export const evolutionRouter = Router();
 
@@ -499,26 +495,13 @@ evolutionRouter.post('/webhook', async (req, res) => {
       pushName: messageData?.pushName ?? null,
     };
 
-    const handle = await bufferMessage(instanceName, jid, content);
-
-    if (handle) {
-      // Redis available: debounce — wait for the patient to finish typing,
-      // then flush all buffered messages and run the agent once.
-      const { nonce, bufferStartTs } = handle;
-      runAgentTask = (async () => {
-        await sleep(DEBOUNCE_MS);
-        const flush = await tryFlushBuffer(instanceName, jid, nonce);
-        if (!flush) return; // another message arrived; that task will handle it
-        await runAgent({
-          ...baseInput,
-          userMessage: flush.combined,
-          historyBeforeTs: flush.historyBeforeTs,
-        });
-      })();
-    } else {
-      // No Redis configured: run immediately (original behaviour).
-      runAgentTask = runAgent({ ...baseInput, userMessage: content });
-    }
+    runAgentTask = debounceAgentRun(
+      instanceName,
+      jid,
+      content,
+      (combined, historyBeforeTs) =>
+        runAgent({ ...baseInput, userMessage: combined, historyBeforeTs }),
+    );
   }
 
   // Em produção (Vercel), `waitUntil` mantém o agent rodando após o 200; em dev
