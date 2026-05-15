@@ -321,6 +321,52 @@ async function cancelAppointment(ctx: ToolContext, args: { appointmentId: string
   return { ok: true, data: { appointmentId: args.appointmentId, status: 'cancelled' } };
 }
 
+async function rescheduleAppointment(
+  ctx: ToolContext,
+  args: { appointmentId: string; newDate: string; newTime: string }
+): Promise<ToolResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.newDate))
+    return { ok: false, error: `Data inválida: ${args.newDate} (use YYYY-MM-DD)` };
+
+  const { data: appt } = await ctx.db.from('appointments')
+    .select('*').eq('id', args.appointmentId).eq('clinic_id', ctx.clinicId).single();
+  if (!appt) return { ok: false, error: 'Agendamento não encontrado.' };
+  if (appt.status === 'cancelled') return { ok: false, error: 'Agendamento já cancelado, não pode ser remarcado.' };
+
+  const prof = await findProfessional(ctx, appt.professional_id);
+  if (!prof) return { ok: false, error: 'Profissional não encontrado.' };
+  const service = (prof.services ?? []).find((s: any) => s.id === appt.service_id);
+  const durationMin = service?.duration ?? 30;
+
+  const newStart = fromZonedTime(args.newDate, args.newTime, ctx.timezone);
+  if (isNaN(newStart.getTime())) return { ok: false, error: `Data/hora inválida: ${args.newDate} ${args.newTime}` };
+  if (newStart.getTime() < Date.now() - 60000) return { ok: false, error: 'Não é possível remarcar para o passado.' };
+  const newEnd = new Date(newStart.getTime() + durationMin * 60000);
+
+  const { data: conflict } = await ctx.db.from('appointments')
+    .select('id').eq('clinic_id', ctx.clinicId).eq('professional_id', appt.professional_id)
+    .eq('start_time', newStart.toISOString()).neq('status', 'cancelled').neq('id', args.appointmentId);
+  if (conflict && conflict.length > 0) return { ok: false, error: 'Horário já ocupado. Consulte list_available_slots para outro.' };
+
+  const { error } = await ctx.db.from('appointments').update({
+    start_time: newStart.toISOString(),
+    end_time: newEnd.toISOString(),
+    status: 'scheduled',
+  }).eq('id', args.appointmentId);
+  if (error) return { ok: false, error: error.message };
+
+  return {
+    ok: true,
+    data: {
+      appointmentId: appt.id, professionalName: prof.name,
+      serviceName: service?.name ?? 'Serviço',
+      newStartTimeUtc: newStart.toISOString(),
+      newStartTimeLocal: humanInTz(newStart, ctx.timezone),
+      timezone: ctx.timezone,
+    },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Date resolver (PT-BR)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -386,6 +432,7 @@ export const toolDeclarations: FunctionDeclaration[] = [
   { name:'list_patient_appointments', description:'Lista próximos agendamentos do paciente.', parameters:{ type:Type.OBJECT, properties:{ patientPhone:{ type:Type.STRING } } } },
   { name:'cancel_appointment', description:'Cancela um agendamento.', parameters:{ type:Type.OBJECT, properties:{ appointmentId:{ type:Type.STRING }, reason:{ type:Type.STRING } }, required:['appointmentId'] } },
   { name:'transfer_to_human', description:'Pausa o agente e transfere para atendente humano.', parameters:{ type:Type.OBJECT, properties:{ reason:{ type:Type.STRING } } } },
+  { name:'reschedule_appointment', description:'Reagenda (remarca) um agendamento existente para nova data e hora. Chame list_available_slots antes para verificar disponibilidade.', parameters:{ type:Type.OBJECT, properties:{ appointmentId:{ type:Type.STRING }, newDate:{ type:Type.STRING, description:'YYYY-MM-DD' }, newTime:{ type:Type.STRING, description:'HH:MM' } }, required:['appointmentId','newDate','newTime'] } },
 ];
 
 export async function executeTool(name: string, args: Record<string, any>, ctx: ToolContext): Promise<ToolResult> {
@@ -400,6 +447,7 @@ export async function executeTool(name: string, args: Record<string, any>, ctx: 
     case 'list_patient_appointments':  return listPatientAppointments(ctx, a);
     case 'cancel_appointment':         return cancelAppointment(ctx, a);
     case 'transfer_to_human':          return transferToHuman(ctx, a);
+    case 'reschedule_appointment':         return rescheduleAppointment(ctx, a);
     default: return { ok: false, error: `Ferramenta desconhecida: ${name}` };
   }
 }

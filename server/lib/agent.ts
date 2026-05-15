@@ -25,6 +25,7 @@ export interface AgentToolsToggle {
   list_patient_appointments?: boolean;
   cancel_appointment?: boolean;
   transfer_to_human?: boolean;
+  reschedule_appointment?: boolean;
 }
 
 export interface AgentEscalation {
@@ -103,6 +104,7 @@ export const DEFAULT_AGENT: AgentConfig = {
     list_patient_appointments: true,
     cancel_appointment: true,
     transfer_to_human: true,
+    reschedule_appointment: true,
   },
 
   escalation: {
@@ -204,6 +206,13 @@ export function buildSystemPrompt(opts: {
     '## Capacidades',
     'Você TEM acesso a ferramentas (function calling). Use-as quando aplicável.',
     '',
+    '## Extração proativa de informação',
+    'Antes de fazer perguntas, analise TODA a mensagem e o histórico para extrair o que já foi dito:',
+    '- Se o paciente já mencionou serviço/procedimento (ex: "consulta", "ultrassom"), use esse nome para fazer a correspondência com os resultados de list_services (comparação case-insensitive). Não pergunte de novo.',
+    '- Se o paciente mencionou o profissional pelo nome, filtre por ele.',
+    '- Se o paciente já forneceu data, nome e serviço na mesma mensagem, avance direto para list_services + list_available_slots sem fazer perguntas intermediárias.',
+    '- Pergunte apenas pelo que genuinamente ainda falta.',
+    '',
     '## Regra crítica de datas',
     'Quando o paciente mencionar uma data ("terça", "amanhã", "10/06", "próxima sexta", "semana que vem"), você DEVE chamar resolve_date(expression="<texto exato do paciente>") ANTES de chamar list_available_slots, list_available_periods, create_appointment ou create_walk_in_appointment.',
     'NUNCA tente calcular a data sozinho. NUNCA use uma data sem confirmar com o paciente o dia da semana.',
@@ -216,19 +225,28 @@ export function buildSystemPrompt(opts: {
     'Sempre que for agendar, primeiro chame list_services para descobrir o bookingMode do serviço escolhido.',
     '',
     '## Fluxo HORA MARCADA (slot)',
-    '1. Pergunte nome, procedimento e data.',
-    '2. list_services → pega serviceId, duração e bookingMode.',
+    '1. Pergunte nome, procedimento e data (o que ainda não souber).',
+    '2. list_services → pega serviceId e bookingMode. Se o paciente já disse o serviço, filtre automaticamente.',
     '3. list_available_slots → ofereça 2-3 horários.',
     '4. Após confirmação ("pode marcar para X"), chame create_appointment.',
     '5. Confirme repetindo data, hora, profissional e serviço.',
     '',
     '## Fluxo ORDEM DE CHEGADA (walk_in)',
-    '1. Pergunte nome, procedimento e data.',
+    '1. Pergunte nome, procedimento e data (o que ainda não souber).',
     '2. list_services → confirma bookingMode="walk_in".',
     '3. list_available_periods → mostra os períodos do dia (ex: "Manhã 08:00-12:00", "Tarde 13:00-18:00") com vagas restantes.',
     '4. Pergunte ao paciente: "Você prefere de manhã ou à tarde?" (use os labels reais retornados).',
     '5. Após escolha, chame create_walk_in_appointment com o periodId.',
     '6. Reforce: "É por ordem de chegada. Compareça à clínica a partir das HH:MM (hora de início do período)." Use o campo reminderToPatient retornado.',
+    '',
+    '## Reagendamento',
+    'Quando o paciente quiser remarcar uma consulta:',
+    '1. list_patient_appointments → obtém appointmentId e detalhes do agendamento atual.',
+    '2. resolve_date → converte a nova data desejada.',
+    '3. list_available_slots → verifica horários disponíveis na nova data.',
+    '4. Confirme: "Posso remarcar sua consulta de [data/hora atual] para [nova data] às [novo horário]?".',
+    '5. reschedule_appointment → executa o reagendamento.',
+    '6. Confirme: "Pronto! Sua consulta foi remarcada para [data] às [hora].".',
     '',
     'NUNCA invente serviços, preços, horários, períodos ou profissionais. Use sempre as ferramentas.',
     'NUNCA chame create_appointment ou create_walk_in_appointment sem antes confirmar tudo com o paciente.',

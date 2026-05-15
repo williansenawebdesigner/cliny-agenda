@@ -98,6 +98,7 @@ export interface AgentTools {
   list_patient_appointments?: boolean;
   cancel_appointment?: boolean;
   transfer_to_human?: boolean;
+  reschedule_appointment?: boolean;
 }
 
 export interface AgentEscalation {
@@ -246,6 +247,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
     list_patient_appointments: true,
     cancel_appointment: true,
     transfer_to_human: true,
+    reschedule_appointment: true,
   },
 
   escalation: {
