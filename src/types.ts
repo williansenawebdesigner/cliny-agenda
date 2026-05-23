@@ -114,6 +114,7 @@ export interface AgentConfig {
   knowledgeBase?: string;
   responseDelayMin?: number;
   responseDelayMax?: number;
+  messageBufferEnabled?: boolean;
   showTyping?: boolean;
   fallbackMessage?: string;
 
@@ -214,6 +215,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   knowledgeBase: '',
   responseDelayMin: 2,
   responseDelayMax: 6,
+  messageBufferEnabled: true,
   showTyping: true,
   fallbackMessage:
     'Desculpe, tive um problema técnico. Em instantes um atendente humano entrará em contato.',

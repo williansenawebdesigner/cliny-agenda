@@ -41,6 +41,7 @@ export interface AgentConfig {
   knowledgeBase?: string;
   responseDelayMin?: number;
   responseDelayMax?: number;
+  messageBufferEnabled?: boolean;
   showTyping?: boolean;
   fallbackMessage?: string;
 
@@ -75,6 +76,7 @@ export const DEFAULT_AGENT: AgentConfig = {
   knowledgeBase: '',
   responseDelayMin: 2,
   responseDelayMax: 6,
+  messageBufferEnabled: true,
   showTyping: true,
   fallbackMessage:
     'Desculpe, tive um problema técnico. Em instantes um atendente humano entrará em contato.',
@@ -301,21 +303,24 @@ export async function loadRecentHistory(
   remoteJid: string,
   limit = 20,
   beforeTs?: number,
+  beforeCreatedAt?: string,
 ): Promise<ConversationTurn[]> {
   let query = db
     .from('whatsapp_messages')
-    .select('from_me, content, message_timestamp')
+    .select('from_me, content, message_timestamp, created_at')
     .eq('instance_name', instanceName)
     .eq('remote_jid', remoteJid);
 
   // Exclude messages that belong to the current debounce window so they don't
   // appear both in history and in the combined userMessage passed to the model.
-  if (beforeTs && beforeTs > 0) {
+  if (beforeCreatedAt) {
+    query = query.lt('created_at', beforeCreatedAt);
+  } else if (beforeTs && beforeTs > 0) {
     query = query.lt('message_timestamp', beforeTs);
   }
 
   const { data } = await query
-    .order('message_timestamp', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit);
   if (!data || data.length === 0) return [];
   return data

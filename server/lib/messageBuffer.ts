@@ -18,8 +18,10 @@ function sleep(ms: number) {
 
 export interface FlushResult {
   combined: string;
-  /** Exclude history messages at/after this unix-second ts (they're in `combined`) */
-  historyBeforeTs: number;
+  /** Exclude history messages created at/after this timestamp (they're in `combined`). */
+  historyBeforeCreatedAt?: string;
+  /** Fallback for older callers/history queries. */
+  historyBeforeTs?: number;
 }
 
 /**
@@ -33,6 +35,8 @@ export async function waitAndFlush(
   db: SupabaseClient,
   instanceName: string,
   jid: string,
+  myId: string | number | null | undefined,
+  myCreatedAt: string | null | undefined,
   myTs: number,
   myText: string,
   debounceMs: number,
@@ -40,32 +44,47 @@ export async function waitAndFlush(
   await sleep(debounceMs);
 
   try {
-    // Is there a newer patient message after ours?
-    const { data: newer } = await db
+    // Is this still the latest patient message after the debounce window?
+    // WhatsApp timestamps are second-granularity, so use the DB cursor created
+    // by the insert. This avoids duplicate replies when several messages arrive
+    // inside the same second.
+    const { data: latest } = await db
       .from('whatsapp_messages')
-      .select('id')
+      .select('id, created_at')
       .eq('instance_name', instanceName)
       .eq('remote_jid', jid)
       .eq('from_me', false)
-      .gt('message_timestamp', myTs)
+      .order('created_at', { ascending: false })
       .limit(1);
 
-    if (newer && newer.length > 0) return null; // another message will handle it
+    const latestMessage = latest?.[0] as
+      | { id?: string | number; created_at?: string }
+      | undefined;
+    if (myId && latestMessage?.id && String(latestMessage.id) !== String(myId)) {
+      return null; // another message will handle this burst
+    }
 
     // We're the last message — collect everything since the last agent reply.
     const { data: lastAgent } = await db
       .from('whatsapp_messages')
-      .select('message_timestamp')
+      .select('message_timestamp, created_at')
       .eq('instance_name', instanceName)
       .eq('remote_jid', jid)
       .eq('from_me', true)
       .eq('source', 'agent')
-      .order('message_timestamp', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1);
 
-    const lastAgentTs = lastAgent?.[0]?.message_timestamp ?? 0;
-    // Look back at most 10 minutes to avoid pulling in very old messages
-    const batchStart = Math.max(lastAgentTs, myTs - 600);
+    const lastAgentRow = lastAgent?.[0] as
+      | { message_timestamp?: number; created_at?: string }
+      | undefined;
+    const lastAgentTs = lastAgentRow?.message_timestamp ?? 0;
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const batchStartCreatedAt =
+      lastAgentRow?.created_at && lastAgentRow.created_at > tenMinutesAgo
+        ? lastAgentRow.created_at
+        : tenMinutesAgo;
+    const batchStartTs = Math.max(lastAgentTs, myTs - 600);
 
     const { data: batch } = await db
       .from('whatsapp_messages')
@@ -73,8 +92,8 @@ export async function waitAndFlush(
       .eq('instance_name', instanceName)
       .eq('remote_jid', jid)
       .eq('from_me', false)
-      .gt('message_timestamp', batchStart)
-      .order('message_timestamp', { ascending: true });
+      .gt('created_at', batchStartCreatedAt)
+      .order('created_at', { ascending: true });
 
     const messages = (batch ?? [])
       .map((m) => (m.content as string) ?? '')
@@ -84,11 +103,12 @@ export async function waitAndFlush(
 
     return {
       combined: messages.join('\n'),
-      historyBeforeTs: batchStart + 1,
+      historyBeforeCreatedAt: batchStartCreatedAt,
+      historyBeforeTs: batchStartTs + 1,
     };
   } catch (err) {
     console.error('[messageBuffer] DB error, falling back to single message', err);
     // Fallback: just process this one message
-    return { combined: myText, historyBeforeTs: myTs };
+    return { combined: myText, historyBeforeCreatedAt: myCreatedAt ?? undefined, historyBeforeTs: myTs };
   }
 }

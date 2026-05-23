@@ -436,6 +436,20 @@ function InstanceModal({ clinicId, existing, professionals, onClose, onSuccess }
                 </button>
               </div>
 
+              <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded">
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">Buffer de Mensagens</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Agrupa mensagens seguidas antes de responder.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateAgent({ messageBufferEnabled: agent.messageBufferEnabled === false })}
+                  className={cn('relative w-12 h-6 rounded-full transition-all', agent.messageBufferEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300')}
+                >
+                  <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all', agent.messageBufferEnabled !== false ? 'left-7' : 'left-1')} />
+                </button>
+              </div>
+
               {/* Model + formality */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">

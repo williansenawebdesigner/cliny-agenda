@@ -242,6 +242,9 @@ interface AgentRunInput {
   userMessage: string;
   /** Exclude history messages at or after this unix-second timestamp (debounce window start). */
   historyBeforeTs?: number;
+  /** Exclude history messages created at or after this timestamp (debounce window start). */
+  historyBeforeCreatedAt?: string;
+  initialDelayMs?: number;
 }
 
 async function runAgent(input: AgentRunInput) {
@@ -256,7 +259,14 @@ async function runAgent(input: AgentRunInput) {
   }
   const db = getAdminClient();
   try {
-    const history = await loadRecentHistory(db, input.instanceName, input.jid, 20, input.historyBeforeTs);
+    const history = await loadRecentHistory(
+      db,
+      input.instanceName,
+      input.jid,
+      20,
+      input.historyBeforeTs,
+      input.historyBeforeCreatedAt
+    );
     const systemPrompt = buildSystemPrompt({
       basePrompt: input.basePrompt,
       agent: input.agent,
@@ -291,7 +301,7 @@ async function runAgent(input: AgentRunInput) {
       console.warn('[agent] empty reply');
       return;
     }
-    const delayMs = pickReplyDelayMs(input.agent, reply);
+    const delayMs = Math.max(0, pickReplyDelayMs(input.agent, reply) - (input.initialDelayMs ?? 0));
     if (input.agent.showTyping !== false) {
       await sendPresence(env, input.instanceName, input.jid, 'composing', Math.min(delayMs, 25000));
     }
@@ -380,7 +390,7 @@ evolutionRouter.post('/webhook', async (req, res) => {
     }
   }
 
-  await db.from('whatsapp_messages').insert({
+  const { data: insertedMessage } = await db.from('whatsapp_messages').insert({
     instance_name: instanceName,
     clinic_id: clinicId,
     remote_jid: jid,
@@ -390,7 +400,7 @@ evolutionRouter.post('/webhook', async (req, res) => {
     audio_base64: audioBase64,
     message_timestamp: messageTimestamp,
     source: isFromMe ? 'user' : 'whatsapp',
-  });
+  }).select('id, created_at').single();
 
   const convId = conversationDocId(instanceName, jid);
   const { data: existingConvArr } = await db
@@ -499,12 +509,31 @@ evolutionRouter.post('/webhook', async (req, res) => {
     // configured by the clinic). Messages arriving within this window are merged
     // into a single agent turn. Check is done via Supabase so it works across
     // Vercel instances without any in-process shared state.
-    const debounceMs = (agent.responseDelayMax ?? DEFAULT_AGENT.responseDelayMax ?? 6) * 1000;
+    const bufferEnabled = agent.messageBufferEnabled !== false;
+    const rawDebounceMs = (agent.responseDelayMax ?? DEFAULT_AGENT.responseDelayMax ?? 6) * 1000;
+    const debounceMs = bufferEnabled ? Math.min(Math.max(rawDebounceMs, 1000), 15000) : 0;
 
     runAgentTask = (async () => {
-      const flush = await waitAndFlush(db, instanceName, jid, messageTimestamp, content, debounceMs);
+      const flush = bufferEnabled
+        ? await waitAndFlush(
+            db,
+            instanceName,
+            jid,
+            (insertedMessage as any)?.id,
+            (insertedMessage as any)?.created_at,
+            messageTimestamp,
+            content,
+            debounceMs
+          )
+        : { combined: content, historyBeforeCreatedAt: (insertedMessage as any)?.created_at, historyBeforeTs: messageTimestamp };
       if (!flush) return; // a newer message will handle this burst
-      await runAgent({ ...baseInput, userMessage: flush.combined, historyBeforeTs: flush.historyBeforeTs });
+      await runAgent({
+        ...baseInput,
+        userMessage: flush.combined,
+        historyBeforeTs: flush.historyBeforeTs,
+        historyBeforeCreatedAt: flush.historyBeforeCreatedAt,
+        initialDelayMs: debounceMs,
+      });
     })();
   }
 
