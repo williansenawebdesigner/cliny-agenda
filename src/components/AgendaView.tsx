@@ -11,7 +11,6 @@ import {
   Focus,
   Plus,
   X,
-  Edit2,
   Trash2,
   CheckCircle,
   FileText,
@@ -62,7 +61,6 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
   const [slotInterval] = useState(30);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
   const fetchData = useCallback(async (showLoading = true) => {
@@ -205,12 +203,6 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
             onSuccess={() => { setIsModalOpen(false); fetchData(false); }}
           />
         )}
-        {isEditing && selectedAppointment && (
-          <NewAppointmentModal clinicId={clinicId} initialDate={selectedDate} existingAppointment={selectedAppointment}
-            onClose={() => setIsEditing(false)}
-            onSuccess={() => { setIsEditing(false); fetchData(false); }}
-          />
-        )}
         {isDetailOpen && selectedAppointment && (
           <AppointmentDetailDrawer
             appointment={selectedAppointment}
@@ -218,7 +210,6 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
             professional={professionals[selectedAppointment.professionalId]}
             procedure={procedures[selectedAppointment.serviceId]}
             onClose={() => setIsDetailOpen(false)}
-            onEdit={() => { setIsEditing(true); setIsDetailOpen(false); }}
             onReschedule={() => openReschedule(selectedAppointment)}
             onAction={() => { setIsDetailOpen(false); fetchData(false); }}
           />
@@ -795,9 +786,9 @@ function DayTimeline({ selectedDate, appointments, patients, professionals, proc
 
 // ─── Appointment Detail Drawer ────────────────────────────────────────────────
 
-function AppointmentDetailDrawer({ appointment, patient, professional, procedure, onClose, onAction, onEdit, onReschedule }: {
+function AppointmentDetailDrawer({ appointment, patient, professional, procedure, onClose, onAction, onReschedule }: {
   appointment: Appointment; patient: any; professional: any; procedure: any;
-  onClose: () => void; onAction: () => void; onEdit: () => void; onReschedule: () => void;
+  onClose: () => void; onAction: () => void; onReschedule: () => void;
 }) {
   const [loading, setLoading] = useState(false);
 

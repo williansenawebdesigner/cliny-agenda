@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, FormEvent, useMemo, useCallback } from 'react';
 import { WhatsAppInstance, WhatsAppConversation } from '../types';
-import { Send, User, Play, Pause, Bot, BotOff, Check, CheckCheck, RefreshCcw, MessageSquare } from 'lucide-react';
+import { Send, User, Play, Pause, Bot, BotOff, CheckCheck, RefreshCcw, MessageSquare } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';

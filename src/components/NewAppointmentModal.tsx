@@ -1,38 +1,34 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { X, Search, Plus, Save, Edit2, User } from 'lucide-react';
+import { X, Search, Plus, User } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
-import { cn } from '../lib/utils';
-import { Professional, Patient, Appointment, ProfessionalService } from '../types';
+import { Professional, Patient, ProfessionalService } from '../types';
 
 interface NewAppointmentModalProps {
   clinicId: string;
   initialDate?: Date;
-  existingAppointment?: Appointment;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function NewAppointmentModal({ clinicId, initialDate, existingAppointment, onClose, onSuccess }: NewAppointmentModalProps) {
+export function NewAppointmentModal({ clinicId, initialDate, onClose, onSuccess }: NewAppointmentModalProps) {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Form State
-  const [selectedPatientId, setSelectedPatientId] = useState(existingAppointment?.patientId || '');
-  const [selectedProfessionalId, setSelectedProfessionalId] = useState(existingAppointment?.professionalId || '');
-  const [selectedServiceId, setSelectedServiceId] = useState(existingAppointment?.serviceId || '');
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState('');
   
   const [date, setDate] = useState(() => {
-    if (existingAppointment) return new Date(existingAppointment.startTime).toISOString().split('T')[0];
     return initialDate ? initialDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
   });
   const [time, setTime] = useState(() => {
-    if (existingAppointment) return new Date(existingAppointment.startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     return initialDate ? initialDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '09:00';
   });
-  const [notes, setNotes] = useState(existingAppointment?.notes || '');
+  const [notes, setNotes] = useState('');
   const [patientSearch, setPatientSearch] = useState('');
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
@@ -53,10 +49,6 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
         setProfessionals(profData.professionals);
         setPatients(patData.patients);
 
-        if (existingAppointment) {
-          const pat = patData.patients.find(p => p.id === existingAppointment.patientId);
-          if (pat) setPatientSearch(pat.name);
-        }
       } catch (error) {
         console.error(error);
       } finally {
@@ -64,7 +56,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
       }
     };
     fetchData();
-  }, [clinicId, existingAppointment]);
+  }, [clinicId]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -83,16 +75,12 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
         serviceId: selectedServiceId,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
-        status: existingAppointment?.status || 'scheduled',
+        status: 'scheduled',
         price: service?.price || 0,
         notes
       };
 
-      if (existingAppointment) {
-        await api.put(`/api/appointments/${existingAppointment.id}`, appointmentData);
-      } else {
-        await api.post('/api/appointments', appointmentData);
-      }
+      await api.post('/api/appointments', appointmentData);
       onSuccess();
     } catch (error) {
       console.error(error);
@@ -163,17 +151,17 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
       >
         <div className="p-8 border-b border-slate-50 flex items-center justify-between shrink-0 bg-white z-10">
           <div className="flex items-center gap-5">
-             <div className="w-12 h-12 bg-emerald-500 text-white rounded flex items-center justify-center shadow-lg shadow-emerald-100">
-                {existingAppointment ? <Edit2 size={22} /> : <Plus size={22} />}
-             </div>
-             <div>
-                <h3 className="text-2xl font-bold tracking-tight text-slate-900">
-                  {existingAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
-                </h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                  Preencha os detalhes do atendimento
-                </p>
-             </div>
+            <div className="w-12 h-12 bg-emerald-500 text-white rounded flex items-center justify-center shadow-lg shadow-emerald-100">
+              <Plus size={22} />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold tracking-tight text-slate-900">
+                Novo Agendamento
+              </h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                Preencha os detalhes do atendimento
+              </p>
+            </div>
           </div>
           <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded transition-all">
             <X size={24} className="text-slate-300" />
@@ -381,8 +369,7 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
-                {existingAppointment ? <Save size={18} /> : null}
-                {existingAppointment ? 'SALVAR ALTERAÇÕES' : 'CONFIRMAR AGENDAMENTO'}
+                CONFIRMAR AGENDAMENTO
               </>
             )}
           </button>

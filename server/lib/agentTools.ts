@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Type, type FunctionDeclaration } from '@google/genai';
 import {
-  DEFAULT_TIMEZONE, dayOfWeekInTz, endOfDayInTz, fromZonedTime,
+  dayOfWeekInTz, endOfDayInTz, fromZonedTime,
   hmInTz, humanInTz, startOfDayInTz, ymdInTz,
 } from './tz.js';
 
@@ -387,7 +387,7 @@ function resolveDateExpression(expr:string,tz:string):{ymd?:string;weekdayName?:
   const raw=expr?.trim();if(!raw)return{error:'Expressão vazia'};
   const text=stripAccentsLower(raw);
   const now=new Date();const todayYmd=ymdInTz(now,tz);
-  const [ty,tm,td]=todayYmd.split('-').map(Number);
+  const [ty]=todayYmd.split('-').map(Number);
   const todayW=dayOfWeekInTz(startOfDayInTz(todayYmd,tz),tz);
   if(/^\d{4}-\d{2}-\d{2}$/.test(text))return{ymd:text,interpreted:'ISO'};
   const brM=text.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);

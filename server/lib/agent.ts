@@ -439,16 +439,3 @@ export function detectsEscalation(cfg: AgentConfig, message: string): boolean {
   const m = message.toLowerCase();
   return (cfg.escalation.keywords ?? []).some((k) => k && m.includes(k.toLowerCase()));
 }
-
-/** Apply placeholders {paciente} {data} {hora} {profissional} {servico} */
-export function fillTemplate(
-  tpl: string,
-  vars: { paciente?: string; data?: string; hora?: string; profissional?: string; servico?: string }
-): string {
-  return tpl
-    .replace(/\{paciente\}/gi, vars.paciente || '')
-    .replace(/\{data\}/gi, vars.data || '')
-    .replace(/\{hora\}/gi, vars.hora || '')
-    .replace(/\{profissional\}/gi, vars.profissional || '')
-    .replace(/\{servico\}/gi, vars.servico || '');
-}

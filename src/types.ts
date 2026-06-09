@@ -6,16 +6,6 @@ export type AppointmentStatus =
   | 'cancelled'
   | 'no-show';
 
-export interface Clinic {
-  id: string;
-  name: string;
-  address?: string;
-  whatsappNumber?: string;
-  adminEmail: string;
-  timezone?: string; // IANA timezone, e.g. "America/Sao_Paulo"
-  settings?: any;
-}
-
 export const DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 
 export const COMMON_TIMEZONES: { id: string; label: string }[] = [
@@ -197,15 +187,6 @@ export interface Appointment {
   walkIn?: boolean;
   periodId?: string;
   periodLabel?: string;
-}
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
 }
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {

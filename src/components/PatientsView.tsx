@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Users, Search, Phone, X, User, ChevronRight } from 'lucide-react';
+import { Plus, Users, Search, Phone, User, ChevronRight } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { Patient } from '../types';
@@ -123,7 +123,7 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
   );
 }
 
-export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
+function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');

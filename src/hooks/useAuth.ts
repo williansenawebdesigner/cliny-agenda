@@ -18,7 +18,7 @@ interface MeResponse {
   clinic: ClinicData | null;
 }
 
-export interface AuthState {
+interface AuthState {
   user: User | null;
   session: Session | null;
   clinic: ClinicData | null;
