@@ -11,6 +11,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
+import { PageHeader } from './ui/PageHeader';
+import { LoadingState } from './ui/LoadingState';
+import { EmptyState } from './ui/EmptyState';
 import {
   Professional,
   ProfessionalService,
@@ -59,38 +62,36 @@ export function ProfessionalsView({ clinicId }: ProfessionalViewProps) {
 
   return (
     <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Equipe & Serviços</h1>
-          <p className="text-slate-400 font-medium text-sm">Gerencie os profissionais e os serviços que cada um executa.</p>
-        </div>
-        <button 
-          onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full md:w-auto md:px-6 py-2.5 rounded flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
-        >
-          <Plus size={18} />
-          Novo Profissional
-        </button>
-      </div>
+      <PageHeader
+        title="Equipe & Serviços"
+        description="Gerencie os profissionais e os servicos que cada um executa."
+        actions={
+          <button
+            onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full md:w-auto md:px-6 py-2.5 rounded flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all font-bold active:scale-95 shrink-0 text-sm"
+          >
+            <Plus size={18} />
+            Novo Profissional
+          </button>
+        }
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <LoadingState className="h-64" />
       ) : professionals.length === 0 ? (
-        <div className="bg-slate-50/50 rounded p-12 text-center flex flex-col items-center border border-dashed border-slate-100">
-          <div className="w-16 h-16 bg-white rounded flex items-center justify-center text-slate-200 mb-6 shadow-sm">
-             <User size={28} />
-          </div>
-          <h3 className="text-lg font-bold text-slate-900 mb-2">Sua equipe está vazia</h3>
-          <p className="text-sm text-slate-400 max-w-xs mb-8 leading-relaxed font-medium">Adicione os profissionais e seus respectivos serviços.</p>
-          <button 
-            onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
-            className="bg-emerald-600 text-white px-8 py-3 rounded font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
-          >
-            Adicionar Profissional
-          </button>
-        </div>
+        <EmptyState
+          icon={<User size={28} />}
+          title="Sua equipe está vazia"
+          description="Adicione os profissionais e seus respectivos servicos."
+          action={
+            <button
+              onClick={() => { setEditingProf(null); setIsModalOpen(true); }}
+              className="bg-emerald-600 text-white px-8 py-3 rounded font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+            >
+              Adicionar Profissional
+            </button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {professionals.map((prof: Professional) => (

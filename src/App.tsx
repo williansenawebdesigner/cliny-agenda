@@ -10,6 +10,7 @@ import {
   Building2,
   Phone,
   Plus,
+  Settings,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -21,6 +22,9 @@ import { AgendaView } from './components/AgendaView';
 import { NewAppointmentModal } from './components/NewAppointmentModal';
 import { WhatsAppView } from './components/WhatsAppView';
 import { ChatView } from './components/ChatView';
+import { DashboardView } from './components/DashboardView';
+import { SettingsView } from './components/SettingsView';
+import { PatientRecordView } from './components/PatientRecordView';
 
 import { LoginScreen } from './components/auth/LoginScreen';
 import { RegisterScreen } from './components/auth/RegisterScreen';
@@ -70,12 +74,14 @@ export default function App() {
           <RequireAuthAndClinic isAuthenticated={isAuthenticated} clinic={clinic} refetchClinic={refetchClinic} />
         }
       >
-        <Route path="/dashboard" element={<DashboardView />} />
+        <Route path="/dashboard" element={<DashboardScreen />} />
         <Route path="/agenda" element={<AgendaScreen />} />
         <Route path="/patients" element={<PatientsScreen />} />
+        <Route path="/patients/:patientId" element={<PatientRecordScreen />} />
         <Route path="/professionals" element={<ProfessionalsScreen />} />
         <Route path="/whatsapp" element={<WhatsAppScreen />} />
         <Route path="/chat" element={<ChatScreen />} />
+        <Route path="/settings" element={<SettingsScreen />} />
       </Route>
 
       {/* Fallback inteligente baseado no estado */}
@@ -128,6 +134,10 @@ function RequireAuthAndClinic({
 
 // ── Route components que recebem clinicId do contexto ────────────────────────
 
+function DashboardScreen() {
+  const { clinic } = useClinic();
+  return <DashboardView clinicId={clinic!.id} />;
+}
 function AgendaScreen() {
   const { clinic } = useClinic();
   return <AgendaView clinicId={clinic!.id} />;
@@ -135,6 +145,10 @@ function AgendaScreen() {
 function PatientsScreen() {
   const { clinic } = useClinic();
   return <PatientsView clinicId={clinic!.id} />;
+}
+function PatientRecordScreen() {
+  const { clinic } = useClinic();
+  return <PatientRecordView clinicId={clinic!.id} />;
 }
 function ProfessionalsScreen() {
   const { clinic } = useClinic();
@@ -147,6 +161,10 @@ function WhatsAppScreen() {
 function ChatScreen() {
   const { clinic } = useClinic();
   return <ChatView clinicId={clinic!.id} />;
+}
+function SettingsScreen() {
+  const { clinic, refetchClinic } = useClinic();
+  return <SettingsView clinic={clinic!} onSaved={refetchClinic} />;
 }
 
 // ── Auth route wrappers (passam navigate handlers para os componentes) ────────
@@ -182,6 +200,7 @@ const NAV_ITEMS = [
   { path: '/patients', icon: Users, label: 'Pacientes' },
   { path: '/professionals', icon: Building2, label: 'Equipe' },
   { path: '/whatsapp', icon: Phone, label: 'WhatsApp IA' },
+  { path: '/settings', icon: Settings, label: 'Configurações' },
 ];
 
 const MOBILE_NAV_ITEMS = [
@@ -190,6 +209,11 @@ const MOBILE_NAV_ITEMS = [
   { path: '/patients', icon: Users },
   { path: '/chat', icon: MessageSquare },
 ];
+
+function isNavItemActive(pathname: string, itemPath: string) {
+  if (itemPath === '/dashboard') return pathname === itemPath;
+  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+}
 
 function MainLayout() {
   const { user, logout } = useAuth();
@@ -214,7 +238,7 @@ function MainLayout() {
               to={item.path}
               icon={<item.icon size={18} />}
               label={item.label}
-              isActive={location.pathname === item.path}
+              isActive={isNavItemActive(location.pathname, item.path)}
             />
           ))}
         </nav>
@@ -279,7 +303,7 @@ function MainLayout() {
 
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-xl border-t border-slate-50 flex items-center justify-around px-4 pb-4 z-40">
           {MOBILE_NAV_ITEMS.slice(0, 2).map((item) => (
-            <MobileNavItem key={item.path} to={item.path} icon={<item.icon size={22} />} active={location.pathname === item.path} />
+            <MobileNavItem key={item.path} to={item.path} icon={<item.icon size={22} />} active={isNavItemActive(location.pathname, item.path)} />
           ))}
           <button
             className="w-12 h-12 -mt-10 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-200"
@@ -288,7 +312,7 @@ function MainLayout() {
             <Plus size={28} />
           </button>
           {MOBILE_NAV_ITEMS.slice(2).map((item) => (
-            <MobileNavItem key={item.path} to={item.path} icon={<item.icon size={22} />} active={location.pathname === item.path} />
+            <MobileNavItem key={item.path} to={item.path} icon={<item.icon size={22} />} active={isNavItemActive(location.pathname, item.path)} />
           ))}
         </nav>
       </main>
@@ -392,16 +416,5 @@ function MobileNavItem({ to, icon, active }: { to: string; icon: ReactNode; acti
     >
       {icon}
     </Link>
-  );
-}
-
-function DashboardView() {
-  return (
-    <div className="py-20 text-center">
-      <h2 className="text-2xl font-bold text-slate-900 mb-2">Bem-vindo ao Cliny.</h2>
-      <p className="text-slate-400 font-medium max-w-sm mx-auto">
-        Utilize o menu lateral para gerenciar sua clínica, agenda e conversas com a IA.
-      </p>
-    </div>
   );
 }

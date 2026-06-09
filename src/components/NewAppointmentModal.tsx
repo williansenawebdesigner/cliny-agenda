@@ -34,6 +34,12 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
   });
   const [notes, setNotes] = useState(existingAppointment?.notes || '');
   const [patientSearch, setPatientSearch] = useState('');
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+  const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientPhone, setNewPatientPhone] = useState('');
+  const [newPatientEmail, setNewPatientEmail] = useState('');
+  const [creatingPatient, setCreatingPatient] = useState(false);
+  const [patientError, setPatientError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -102,6 +108,44 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
 
   const selectedProfServices = professionals.find(p => p.id === selectedProfessionalId)?.services || [];
 
+  const openCreatePatient = () => {
+    setPatientError(null);
+    setIsCreatingPatient(true);
+    if (!newPatientName && patientSearch && !selectedPatientId) {
+      setNewPatientName(patientSearch);
+    }
+  };
+
+  const handleCreatePatient = async () => {
+    if (!newPatientName.trim() || !newPatientPhone.trim()) {
+      setPatientError('Informe nome e telefone para cadastrar o paciente.');
+      return;
+    }
+    setCreatingPatient(true);
+    setPatientError(null);
+    try {
+      const data = await api.post<{ patient: Patient }>('/api/patients', {
+        name: newPatientName,
+        phone: newPatientPhone,
+        email: newPatientEmail,
+      });
+      setPatients((current) =>
+        [...current, data.patient].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setSelectedPatientId(data.patient.id);
+      setPatientSearch(data.patient.name);
+      setIsCreatingPatient(false);
+      setNewPatientName('');
+      setNewPatientPhone('');
+      setNewPatientEmail('');
+    } catch (err: any) {
+      console.error(err);
+      setPatientError(err?.message ?? 'Nao foi possivel cadastrar o paciente.');
+    } finally {
+      setCreatingPatient(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <motion.div 
@@ -147,7 +191,11 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
               <section className="space-y-4">
                 <div className="flex items-center justify-between px-1">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Paciente</label>
-                   <button type="button" className="text-emerald-600 text-[10px] font-bold uppercase tracking-widest hover:underline">
+                   <button
+                     type="button"
+                     onClick={openCreatePatient}
+                     className="text-emerald-600 text-[10px] font-bold uppercase tracking-widest hover:underline"
+                   >
                       + Cadastrar Novo
                    </button>
                 </div>
@@ -185,10 +233,67 @@ export function NewAppointmentModal({ clinicId, initialDate, existingAppointment
                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{p.phone}</span>
                             </div>
                          </button>
-                       ))}
+                      ))}
                     </div>
                   )}
                 </div>
+                {isCreatingPatient && (
+                  <div className="bg-slate-50 border border-slate-100 rounded p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Cadastro rapido
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingPatient(false)}
+                        className="p-1 text-slate-300 hover:text-slate-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {patientError && (
+                      <div className="rounded border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+                        {patientError}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        value={newPatientName}
+                        onChange={(e) => setNewPatientName(e.target.value)}
+                        placeholder="Nome completo"
+                        className="w-full px-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded outline-none transition-all font-bold text-sm"
+                      />
+                      <input
+                        value={newPatientPhone}
+                        onChange={(e) => setNewPatientPhone(e.target.value)}
+                        placeholder="Telefone"
+                        className="w-full px-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded outline-none transition-all font-bold text-sm"
+                      />
+                    </div>
+                    <input
+                      type="email"
+                      value={newPatientEmail}
+                      onChange={(e) => setNewPatientEmail(e.target.value)}
+                      placeholder="E-mail opcional"
+                      className="w-full px-4 py-3 bg-white border border-slate-100 focus:border-emerald-500 rounded outline-none transition-all font-bold text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreatePatient}
+                      disabled={creatingPatient}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white rounded font-bold text-sm transition-all flex items-center justify-center gap-2"
+                    >
+                      {creatingPatient ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Plus size={15} />
+                          Cadastrar e selecionar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </section>
 
               {/* Professional & Procedure */}

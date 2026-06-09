@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { WhatsAppInstance, Professional, AgentConfig, DEFAULT_AGENT_CONFIG } from '../types';
 import { cn } from '../lib/utils';
+import { PageHeader } from './ui/PageHeader';
+import { LoadingState } from './ui/LoadingState';
+import { EmptyState } from './ui/EmptyState';
 
 export function WhatsAppView({ clinicId }: { clinicId: string }) {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -44,40 +47,37 @@ export function WhatsAppView({ clinicId }: { clinicId: string }) {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between gap-4 md:items-end">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Conexões WhatsApp</h2>
-          <p className="text-slate-500 font-medium mt-1 text-sm">Gestão de instâncias e agente de IA</p>
-        </div>
-        <button
-          onClick={() => { setEditingInstance(null); setIsModalOpen(true); }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded flex items-center justify-center gap-2 shadow-sm transition-all font-bold active:scale-95 shrink-0 text-sm"
-        >
-          <Plus size={18} />
-          Conectar Número
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center p-20">
-          <RefreshCcw className="animate-spin text-emerald-500 w-8 h-8" />
-        </div>
-      ) : instances.length === 0 ? (
-        <div className="bg-slate-50 rounded p-16 text-center flex flex-col items-center border border-dashed border-slate-200">
-          <div className="w-16 h-16 bg-white border border-slate-200 rounded flex items-center justify-center text-slate-300 mb-6 shadow-sm">
-            <Phone size={28} />
-          </div>
-          <h3 className="text-lg font-bold text-slate-900 mb-2">Nenhuma instância encontrada</h3>
-          <p className="text-sm text-slate-500 max-w-sm mb-8 leading-relaxed font-medium">
-            Conecte seu WhatsApp para que o Cliny possa realizar agendamentos automáticos.
-          </p>
+      <PageHeader
+        title="Conexões WhatsApp"
+        description="Gestao de instancias e agente de IA."
+        actions={
           <button
             onClick={() => { setEditingInstance(null); setIsModalOpen(true); }}
-            className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded font-bold shadow-sm transition-all active:scale-95"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded flex items-center justify-center gap-2 shadow-sm transition-all font-bold active:scale-95 shrink-0 text-sm"
           >
-            Começar agora
+            <Plus size={18} />
+            Conectar Número
           </button>
-        </div>
+        }
+      />
+
+      {loading ? (
+        <LoadingState />
+      ) : instances.length === 0 ? (
+        <EmptyState
+          icon={<Phone size={28} />}
+          title="Nenhuma instância encontrada"
+          description="Conecte seu WhatsApp para que o Cliny possa realizar agendamentos automaticos."
+          className="bg-slate-50 border-slate-200 p-16"
+          action={
+            <button
+              onClick={() => { setEditingInstance(null); setIsModalOpen(true); }}
+              className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded font-bold shadow-sm transition-all active:scale-95"
+            >
+              Começar agora
+            </button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-4">
           {instances.map((inst) => (

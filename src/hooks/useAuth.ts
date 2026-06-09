@@ -6,6 +6,7 @@ import { api, ApiError } from '../lib/api';
 export interface ClinicData {
   id: string;
   name: string;
+  address?: string;
   timezone: string;
   whatsappNumber?: string;
   adminEmail: string;

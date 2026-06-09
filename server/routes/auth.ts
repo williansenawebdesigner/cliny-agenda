@@ -83,7 +83,7 @@ authRouter.get('/me', requireAuthBasic, async (req, res) => {
   const { userId, email } = req.auth!;
   const { data: clinic } = await getAdminClient()
     .from('clinics')
-    .select('id, name, timezone, whatsapp_number, admin_email, settings')
+    .select('id, name, address, timezone, whatsapp_number, admin_email, settings')
     .eq('user_id', userId)
     .limit(1)
     .maybeSingle();

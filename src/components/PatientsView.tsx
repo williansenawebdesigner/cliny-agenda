@@ -1,8 +1,13 @@
 import { useState, useEffect, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Users, Search, Phone, X, User, ChevronRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { Patient } from '../types';
+import { PageHeader } from './ui/PageHeader';
+import { LoadingState } from './ui/LoadingState';
+import { EmptyState } from './ui/EmptyState';
+import { ModalShell } from './ui/ModalShell';
 
 interface PatientsViewProps {
   clinicId: string;
@@ -37,12 +42,11 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
 
   return (
     <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Pacientes</h1>
-          <p className="text-slate-400 font-medium text-sm">Gerencie o prontuário e histórico de todos os seus clientes.</p>
-        </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+      <PageHeader
+        title="Pacientes"
+        description="Gerencie o prontuario e historico de todos os seus clientes."
+        actions={
+          <>
           <div className="relative group flex-1 md:flex-none">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors pointer-events-none" />
             <input 
@@ -60,25 +64,24 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
             <Plus size={18} />
             <span className="hidden md:inline font-bold text-sm">Novo Paciente</span>
           </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="space-y-2">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <LoadingState />
         ) : filteredPatients.length === 0 ? (
-          <div className="bg-slate-50/50 rounded py-20 text-center flex flex-col items-center border border-dashed border-slate-100">
-             <div className="w-16 h-16 bg-white rounded flex items-center justify-center text-slate-200 mb-4 shadow-sm">
-                <Users size={28} />
-             </div>
-             <p className="text-slate-400 font-bold">Nenhum paciente encontrado.</p>
-          </div>
+          <EmptyState
+            icon={<Users size={28} />}
+            title="Nenhum paciente encontrado"
+            description={searchTerm ? 'Ajuste a busca ou cadastre um novo paciente.' : 'Cadastre pacientes para iniciar historico e agendamentos.'}
+            className="py-20"
+          />
         ) : (
           <div className="space-y-3">
             {filteredPatients.map((patient) => (
-              <div key={patient.id} className="p-4 md:p-5 flex items-center justify-between bg-white border border-slate-50 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all rounded group cursor-pointer shadow-sm shadow-slate-100/50">
+              <Link key={patient.id} to={`/patients/${patient.id}`} className="p-4 md:p-5 flex items-center justify-between bg-white border border-slate-50 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all rounded group cursor-pointer shadow-sm shadow-slate-100/50">
                 <div className="flex items-center gap-5">
                    <div className="w-11 h-11 bg-slate-50 rounded flex items-center justify-center text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
                       <User size={20} />
@@ -94,12 +97,12 @@ export function PatientsView({ clinicId }: PatientsViewProps) {
                    </div>
                 </div>
                 <div className="flex items-center gap-4">
-                   <button className="hidden md:block px-4 py-2 rounded text-[10px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all">Prontuário</button>
+                   <span className="hidden md:block px-4 py-2 rounded text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 group-hover:bg-emerald-50 transition-all">Prontuário</span>
                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-200 group-hover:text-emerald-500 transition-colors">
                       <ChevronRight size={18} />
                    </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}
@@ -140,28 +143,8 @@ export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSu
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"
-      />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="relative bg-white w-full max-w-lg rounded shadow-2xl overflow-hidden"
-      >
-        <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-          <h3 className="text-xl font-bold tracking-tight">Novo Paciente</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded transition-colors">
-            <X size={20} className="text-slate-300" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+    <ModalShell title="Novo Paciente" subtitle="Cadastro e contato" icon={<User size={20} />} onClose={onClose}>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
             <input 
@@ -186,6 +169,17 @@ export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSu
             />
           </div>
 
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 focus:border-emerald-500 focus:bg-white rounded outline-none transition-all font-bold text-slate-900 placeholder:text-slate-300 shadow-inner"
+              placeholder="email@exemplo.com"
+            />
+          </div>
+
           <button 
             disabled={submitting}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold py-4 rounded shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-3 mt-4 active:scale-[0.98]"
@@ -195,7 +189,6 @@ export function PatientModal({ onClose, onSuccess }: { onClose: () => void, onSu
             ) : 'Cadastrar Paciente'}
           </button>
         </form>
-      </motion.div>
-    </div>
+    </ModalShell>
   );
 }

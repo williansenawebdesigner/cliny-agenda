@@ -40,6 +40,8 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 import { NewAppointmentModal } from './NewAppointmentModal';
+import { PageHeader } from './ui/PageHeader';
+import { LoadingState } from './ui/LoadingState';
 
 interface AgendaViewProps {
   clinicId: string;
@@ -115,13 +117,11 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Agenda</h1>
-          <p className="text-slate-500 font-medium text-xs uppercase tracking-widest mt-0.5">Controle de atendimentos</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+      <PageHeader
+        title="Agenda"
+        description="Controle de atendimentos."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-slate-100 p-1 rounded">
             <ViewTab active={viewMode === 'focus'} onClick={() => setViewMode('focus')} icon={<Focus size={14} />} label="Foco" />
             <ViewTab active={viewMode === 'day'} onClick={() => setViewMode('day')} icon={<CalendarDays size={14} />} label="Dia" />
@@ -141,8 +141,9 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
           <button onClick={() => fetchData()} className="p-2 bg-white border border-slate-200 rounded text-slate-400 hover:text-emerald-600 transition-all shadow-sm" title="Atualizar">
             <RotateCcw size={16} className={cn(loading && 'animate-spin')} />
           </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Prof filter (hidden in focus mode) */}
       {viewMode !== 'focus' && (
@@ -159,9 +160,7 @@ export function AgendaView({ clinicId }: AgendaViewProps) {
 
       {/* Main view */}
       {loading ? (
-        <div className="flex items-center justify-center h-96">
-          <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <LoadingState className="h-96" />
       ) : viewMode === 'focus' ? (
         <FocusMode
           selectedDate={selectedDate}
