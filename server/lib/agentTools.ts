@@ -69,11 +69,18 @@ async function findOrCreatePatient(
   ctx: ToolContext, name: string, phone: string
 ): Promise<{ id: string; created: boolean }> {
   const cleanPhone = phone.replace(/\D/g, '');
+  const cleanName = name.trim();
+  // A single WhatsApp number can be used to book for several people (e.g. a
+  // child scheduling for both parents). Match by phone AND name so each named
+  // person becomes a distinct patient instead of collapsing onto the first one.
   const { data: existing } = await ctx.db.from('patients')
-    .select('id').eq('clinic_id', ctx.clinicId).eq('phone', cleanPhone).limit(1);
-  if (existing && existing.length > 0) return { id: existing[0].id, created: false };
+    .select('id, name').eq('clinic_id', ctx.clinicId).eq('phone', cleanPhone);
+  const match = (existing ?? []).find(
+    (p: any) => (p.name ?? '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  if (match) return { id: match.id, created: false };
   const { data: created } = await ctx.db.from('patients')
-    .insert({ clinic_id: ctx.clinicId, name: name.trim(), phone: cleanPhone })
+    .insert({ clinic_id: ctx.clinicId, name: cleanName, phone: cleanPhone })
     .select('id').single();
   return { id: created!.id, created: true };
 }
@@ -181,25 +188,37 @@ async function createAppointment(
   };
 }
 
-async function listPatientAppointments(ctx: ToolContext, args: { patientPhone?: string }): Promise<ToolResult> {
+async function listPatientAppointments(ctx: ToolContext, args: { patientPhone?: string; patientName?: string }): Promise<ToolResult> {
   const phone = (args.patientPhone || jidToPhone(ctx.remoteJid)).replace(/\D/g, '');
+  // One number may belong to several patients (e.g. a child who books for both
+  // parents). Fetch all of them; the agent uses patientName to disambiguate.
   const { data: patients } = await ctx.db.from('patients')
-    .select('id, name').eq('clinic_id', ctx.clinicId).eq('phone', phone).limit(1);
-  if (!patients || patients.length === 0) return { ok: true, data: { appointments: [], reason: 'Paciente não encontrado.' } };
+    .select('id, name').eq('clinic_id', ctx.clinicId).eq('phone', phone);
+  let people = patients ?? [];
+  if (args.patientName && args.patientName.trim()) {
+    const wanted = args.patientName.trim().toLowerCase();
+    const filtered = people.filter((p: any) => (p.name ?? '').trim().toLowerCase() === wanted);
+    if (filtered.length > 0) people = filtered;
+  }
+  if (people.length === 0) return { ok: true, data: { appointments: [], reason: 'Paciente não encontrado.' } };
 
-  const patient = patients[0];
+  const ids = people.map((p: any) => p.id);
+  const nameById = new Map(people.map((p: any) => [p.id, p.name]));
   const { data: appts } = await ctx.db.from('appointments')
-    .select('id, start_time, status, professional_id, service_id')
-    .eq('clinic_id', ctx.clinicId).eq('patient_id', patient.id)
+    .select('id, start_time, status, professional_id, service_id, patient_id')
+    .eq('clinic_id', ctx.clinicId).in('patient_id', ids)
     .gte('start_time', new Date().toISOString())
-    .order('start_time', { ascending: true }).limit(10);
+    .order('start_time', { ascending: true }).limit(20);
 
   return {
     ok: true,
     data: {
-      patientId: patient.id, patientName: patient.name, timezone: ctx.timezone,
+      timezone: ctx.timezone,
+      patients: people.map((p: any) => ({ patientId: p.id, patientName: p.name })),
       appointments: (appts ?? []).map((a: any) => ({
-        appointmentId: a.id, startTimeUtc: a.start_time,
+        appointmentId: a.id,
+        patientId: a.patient_id, patientName: nameById.get(a.patient_id),
+        startTimeUtc: a.start_time,
         startTimeLocal: humanInTz(new Date(a.start_time), ctx.timezone),
         status: a.status, professionalId: a.professional_id, serviceId: a.service_id,
       })),
@@ -429,7 +448,7 @@ export const toolDeclarations: FunctionDeclaration[] = [
   { name:'create_appointment', description:'Cria agendamento por hora marcada.', parameters:{ type:Type.OBJECT, properties:{ patientName:{ type:Type.STRING }, patientPhone:{ type:Type.STRING }, professionalId:{ type:Type.STRING }, serviceId:{ type:Type.STRING }, date:{ type:Type.STRING }, time:{ type:Type.STRING }, notes:{ type:Type.STRING } }, required:['patientName','serviceId','date','time'] } },
   { name:'list_available_periods', description:'Lista períodos disponíveis (modo walk-in).', parameters:{ type:Type.OBJECT, properties:{ date:{ type:Type.STRING }, professionalId:{ type:Type.STRING } }, required:['date'] } },
   { name:'create_walk_in_appointment', description:'Cria agendamento por ordem de chegada.', parameters:{ type:Type.OBJECT, properties:{ patientName:{ type:Type.STRING }, patientPhone:{ type:Type.STRING }, professionalId:{ type:Type.STRING }, serviceId:{ type:Type.STRING }, date:{ type:Type.STRING }, periodId:{ type:Type.STRING }, notes:{ type:Type.STRING } }, required:['patientName','serviceId','date','periodId'] } },
-  { name:'list_patient_appointments', description:'Lista próximos agendamentos do paciente.', parameters:{ type:Type.OBJECT, properties:{ patientPhone:{ type:Type.STRING } } } },
+  { name:'list_patient_appointments', description:'Lista próximos agendamentos vinculados ao número do contato. Pode haver vários pacientes no mesmo número (ex: o contato agendou para a mãe e o pai). Passe patientName para filtrar por uma pessoa específica.', parameters:{ type:Type.OBJECT, properties:{ patientPhone:{ type:Type.STRING }, patientName:{ type:Type.STRING, description:'Nome da pessoa para filtrar, quando o contato tiver mais de um paciente.' } } } },
   { name:'cancel_appointment', description:'Cancela um agendamento.', parameters:{ type:Type.OBJECT, properties:{ appointmentId:{ type:Type.STRING }, reason:{ type:Type.STRING } }, required:['appointmentId'] } },
   { name:'transfer_to_human', description:'Pausa o agente e transfere para atendente humano.', parameters:{ type:Type.OBJECT, properties:{ reason:{ type:Type.STRING } } } },
   { name:'reschedule_appointment', description:'Reagenda (remarca) um agendamento existente para nova data e hora. Chame list_available_slots antes para verificar disponibilidade.', parameters:{ type:Type.OBJECT, properties:{ appointmentId:{ type:Type.STRING }, newDate:{ type:Type.STRING, description:'YYYY-MM-DD' }, newTime:{ type:Type.STRING, description:'HH:MM' } }, required:['appointmentId','newDate','newTime'] } },
